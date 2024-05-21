@@ -1,0 +1,43 @@
+
+Diferenças entre 3 linguagens de programação: Python, JavaScript, e Java
+
+1. Python:
+Python é uma linguagem de programação interpretada, de alto nível e com tipagem dinâmica. É conhecida por sua sintaxe clara e legível, que facilita a escrita e manutenção do código.
+
+Código mínimo em Python:
+```python
+# Código em Python para imprimir "Hello, World!"
+print("Hello, World!")
+```
+Execução:
+Comando: python hello.py
+Saída: Hello, World!
+
+2. JavaScript:
+JavaScript é uma linguagem de programação interpretada, comumente usada no desenvolvimento web para criar páginas dinâmicas e interativas. Executa-se principalmente no navegador, mas também pode ser usada no lado do servidor com o Node.js.
+
+Código mínimo em JavaScript:
+```javascript
+// Código em JavaScript para imprimir "Hello, World!"
+console.log("Hello, World!");
+```
+Execução:
+Comando: node hello.js
+Saída: Hello, World!
+
+3. Java:
+Java é uma linguagem de programação compilada e de propósito geral, com tipagem estática. É amplamente utilizada no desenvolvimento de aplicações empresariais e Android.
+
+Código mínimo em Java:
+```java
+// Código em Java para imprimir "Hello, World!"
+public class HelloWorld {
+    public static void main(String[] args) {
+        System.out.println("Hello, World!");
+    }
+}
+```
+Execução:
+Comando: javac HelloWorld.java
+Comando: java HelloWorld
+Saída: Hello, World!
