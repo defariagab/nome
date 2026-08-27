@@ -13,16 +13,24 @@ ao_falhar: pedir_anexo
 passos:
   - acao: abrir
     url: "{url}"
+  # O site demora a montar o formulário: em vez de um tempo fixo, espera o
+  # campo aparecer.
   - acao: esperar
-    ms: 3000
-  - acao: preencher
+    seletor: 'input[name="cpfCnpj"], [id="cpf"], [id="cnpj"]'
+  # "CPF" e "CNPJ" parecem ser a escolha do tipo de documento (o clique
+  # seleciona), enquanto o número vai no campo compartilhado. Os cliques são
+  # opcionais: se forem os próprios campos de texto, o clique só dá foco.
+  - acao: clicar
     seletor: '[id="cnpj"]'
-    valor: "{documento_formatado}"
     quando: cnpj
-  - acao: preencher
+    opcional: true
+  - acao: clicar
     seletor: '[id="cpf"]'
-    valor: "{documento_formatado}"
     quando: "!cnpj"
+    opcional: true
+  - acao: preencher
+    seletor: 'input[name="cpfCnpj"]'
+    valor: "{documento_formatado}"
   - acao: preencher
     seletor: '[id="email"]'
     valor: "{email_notificacao}"

@@ -98,7 +98,7 @@ Passos disponíveis: `abrir`, `preencher`, `selecionar`, `clicar`, `esperar`,
 
 Passos disponíveis: `abrir`, `preencher`, `selecionar`, `clicar`, `esperar`,
 `captcha_imagem`, `captcha_interativo`, `login_gov_br`, `acao_manual`,
-`exigir_texto`, `aguardar_download`, `salvar_pagina_pdf`.
+`abrir_no_navegador`, `exigir_texto`, `aguardar_download`, `salvar_pagina_pdf`.
 
 Dois modificadores servem para os sites do mundo real:
 
@@ -138,6 +138,21 @@ emissões rodam **uma de cada vez**, porque ninguém opera quatro janelas ao mes
 tempo — e, enquanto uma delas espera por você, as de captcha de letras continuam
 rodando normalmente.
 
+### Quando o órgão recusa automação
+
+Alguns portais barram navegador automatizado. O da Receita Federal responde
+exatamente isto: *"o seu acesso foi bloqueado por possuir atributos que o
+caracteriza como um acesso automatizado"*.
+
+Esse bloqueio existe de propósito, e o sistema **não tenta se disfarçar para
+passar por ele**. A fonte usa então o passo `abrir_no_navegador`: o endereço
+abre no navegador que a pessoa já usa — onde a sessão gov.br normalmente já está
+ativa — e o sistema segue cuidando de tudo o que vem depois: arquivamento, nome
+padronizado, leitura da validade no PDF, controle de vencimento, dossiê.
+
+Fontes assim nem abrem o navegador do sistema: não há por que abrir uma janela
+que o órgão vai recusar.
+
 ### Quando o site muda
 
 Uma fonte pode declarar `ao_falhar: pedir_anexo`. Se um passo não encontra o
@@ -155,8 +170,8 @@ como qualquer outro — o controle de validade nunca depende da automação exis
 | Certidão | Situação |
 |---|---|
 | **CNDT** (TST) | **Conferida no escritório em 27/08/2026**: caminho inteiro reconhecido, do início ao captcha. |
-| **CRF/FGTS** (Caixa) | Seletores corretos (conferidos no HTML da página em 27/08/2026). A primeira conferência falhou por rodar com o navegador escondido, e o site entregou outra página — corrigido: a conferência agora roda visível, como a emissão real. |
-| **CND Federal** (RFB/PGFN) | O portal exige **login gov.br**, guardado no perfil `govbr`: entra uma vez e as emissões seguintes reaproveitam a sessão. O caminho do formulário, depois do login, ainda precisa ser mapeado. |
+| **CRF/FGTS** (Caixa) | **Conferida no escritório em 27/08/2026**: caminho inteiro reconhecido, até o botão de emissão. |
+| **CND Federal** (RFB/PGFN) | O portal **recusa navegador automatizado**, e o sistema não contorna isso: abre o endereço no navegador do usuário e arquiva o PDF anexado, com controle de validade igual ao das demais. |
 | **Certidão Unificada da Justiça Federal** (CJF) | Campos conferidos em 27/08/2026: CPF e CNPJ ficam em campos separados (daí o `quando:`), e o site usa reCAPTCHA. Emite na hora e ainda manda cópia por e-mail. Cobre as Regiões **exceto o TRF6**. |
 | **Estaduais e municipais** | Cadastradas como modelo no catálogo, sem fonte: use **Configurações › Mapear um site novo** para descobrir os campos do seu tribunal/SEFAZ/prefeitura. |
 

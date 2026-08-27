@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import webbrowser
 import random
 import string
 from datetime import date, timedelta
@@ -61,6 +62,12 @@ async def executar(fonte: Fonte, ctx: Contexto) -> Resultado:
                     "Captcha incorreto (simulação). O sistema vai gerar uma nova imagem.",
                     repetir=True,
                 )
+
+        elif passo.acao == "abrir_no_navegador":
+            endereco = ctx.aplicar(passo.get("url")) or fonte.url
+            ctx.registrar("navegador_do_usuario", endereco)
+            webbrowser.open(endereco)
+            aguarda_anexo = True
 
         elif passo.acao in {"acao_manual", "login_gov_br", "captcha_interativo"}:
             aguarda_anexo = aguarda_anexo or passo.acao == "acao_manual"

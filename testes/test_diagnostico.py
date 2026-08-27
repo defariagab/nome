@@ -8,7 +8,7 @@ import pytest
 
 from certidoes import diagnostico
 from certidoes.automacao.fontes import listar_fontes
-from certidoes.automacao.tipos import Contexto, Passo, Fonte
+from certidoes.automacao.tipos import Contexto, Fonte, Passo
 from testes.site_falso import SiteFalso
 from testes.test_navegador import _navegador_disponivel
 
@@ -153,3 +153,56 @@ def test_relatorio_avisa_quando_o_seletor_e_largo_demais():
 
     preencher = next(p for p in conferencia.passos if p.acao == "preencher")
     assert "casa com" in preencher.detalhe  # a página de teste tem dois campos de texto
+
+
+@pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
+def test_relatorio_separa_campo_ausente_de_campo_escondido():
+    """São problemas diferentes: um pede outro seletor, o outro pede um passo antes."""
+    def conferir_seletor(seletor: str):
+        fonte = Fonte(
+            codigo="teste", nome="Teste", url="{url}", resultado="download",
+            passos=[
+                Passo("abrir", {"url": "{url}"}),
+                Passo("preencher", {"seletor": seletor, "valor": "{documento}"}),
+                Passo("aguardar_download", {"timeout": 5}),
+            ],
+        )
+        with SiteFalso() as site:
+            return asyncio.run(diagnostico.conferir(fonte, _contexto(site.url)))
+
+    ausente = conferir_seletor("#campo-que-nunca-existiu")
+    assert "não encontrado" in ausente.passos[-1].detalhe
+
+    escondido = conferir_seletor("#escondido")
+    assert "existe" in escondido.passos[-1].detalhe
+    assert "input[type=text] #escondido" in escondido.passos[-1].detalhe
+    assert "falta um passo antes" in escondido.passos[-1].detalhe
+
+
+@pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
+def test_relatorio_mostra_a_etiqueta_e_o_tipo_de_cada_campo():
+    """Sem o tipo, não dá para saber se [id=cnpj] é caixa de texto ou opção."""
+    from dataclasses import asdict
+
+    fonte = Fonte(
+        codigo="teste", nome="Teste", url="{url}", resultado="download",
+        passos=[Passo("abrir", {"url": "{url}"}),
+                Passo("preencher", {"seletor": "#nao-existe", "valor": "x"})],
+    )
+    with SiteFalso() as site:
+        conferencia = asyncio.run(diagnostico.conferir(fonte, _contexto(site.url)))
+
+    texto = diagnostico.em_texto(
+        {"gerado_em": "x", "versao": "0", "fontes": [asdict(conferencia)]}
+    )
+    assert "input[radio]" in texto     # a opção aparece como opção
+    assert "input[text]" in texto      # e a caixa de texto, como caixa de texto
+
+
+def test_fonte_que_so_abre_o_navegador_do_usuario_nao_abre_o_nosso():
+    """O portal da Receita recusa navegador automatizado: não insistimos."""
+    from certidoes.automacao.fontes import carregar_fonte
+
+    rfb = carregar_fonte("rfb_pgfn_conjunta")
+    assert not rfb.exige_navegador
+    assert [p.acao for p in rfb.passos] == ["abrir_no_navegador", "acao_manual"]

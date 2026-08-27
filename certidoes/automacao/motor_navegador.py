@@ -12,6 +12,8 @@ import asyncio
 import base64
 from datetime import date
 
+import webbrowser
+
 from ..config import config
 from ..modelos import SituacaoCertidao, TipoDesafio
 from .extracao import analisar
@@ -246,6 +248,18 @@ async def _executar_passos(fonte: Fonte, ctx: Contexto, navegador: Navegador) ->
                 timeout=int(passo.get("timeout", 900)),
             )
 
+        elif acao == "abrir_no_navegador":
+            # Alguns portais recusam o navegador que o sistema controla — o da
+            # Receita Federal diz isso com todas as letras. Nesses casos abrimos
+            # o navegador do próprio usuário, onde a sessão dele já existe, e o
+            # sistema segue cuidando do arquivo e da validade.
+            endereco = ctx.aplicar(passo.get("url")) or fonte.url
+            ctx.registrar("navegador_do_usuario", endereco)
+            try:
+                webbrowser.open(endereco)
+            except Exception as erro:  # pragma: no cover - depende do sistema
+                ctx.registrar("aviso", f"Não consegui abrir o navegador: {erro}")
+
         elif acao == "acao_manual":
             aguarda_anexo = True
             await ctx.perguntar(
@@ -307,8 +321,35 @@ async def _executar_passos(fonte: Fonte, ctx: Contexto, navegador: Navegador) ->
     )
 
 
+async def _sem_navegador(fonte: Fonte, ctx: Contexto) -> Resultado:
+    """Fontes que só conduzem a pessoa não precisam abrir navegador nenhum."""
+    for passo in fonte.passos:
+        if not passo.se_aplica(ctx.variaveis):
+            continue
+        ctx.registrar("passo", passo.acao)
+        if passo.acao == "abrir_no_navegador":
+            endereco = ctx.aplicar(passo.get("url")) or fonte.url
+            ctx.registrar("navegador_do_usuario", endereco)
+            try:
+                webbrowser.open(endereco)
+            except Exception as erro:  # pragma: no cover - depende do sistema
+                ctx.registrar("aviso", f"Não consegui abrir o navegador: {erro}")
+        elif passo.acao == "acao_manual":
+            await ctx.perguntar(
+                tipo=TipoDesafio.ACAO_MANUAL,
+                instrucao=ctx.aplicar(passo.get("instrucao")),
+                timeout=int(passo.get("timeout", 900)),
+            )
+    return Resultado(
+        sucesso=True, aguarda_anexo=True,
+        mensagem="Conclua no navegador e anexe o PDF para arquivar.",
+    )
+
+
 async def executar(fonte: Fonte, ctx: Contexto) -> Resultado:
     """Uma tentativa completa da fonte, em um navegador limpo."""
+    if not fonte.exige_navegador:
+        return await _sem_navegador(fonte, ctx)
     async with Navegador(visivel=ctx.visivel, pasta_sessao=ctx.pasta_sessao) as navegador:
         try:
             return await _executar_passos(fonte, ctx, navegador)

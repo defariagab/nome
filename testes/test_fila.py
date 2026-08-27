@@ -138,3 +138,18 @@ def test_desafio_cancelado_encerra_a_solicitacao():
     asyncio.run(cenario())
     with sessao() as s:
         assert s.get(Solicitacao, solicitacao_id).estado is EstadoSolicitacao.FALHOU
+
+
+def test_portal_que_recusa_automacao_abre_o_navegador_do_usuario(monkeypatch):
+    """A CND Federal não é automatizada; o sistema conduz e arquiva o anexo."""
+    abertos = []
+    monkeypatch.setattr("webbrowser.open", lambda url: abertos.append(url) or True)
+
+    solicitacao_id = _preparar("rfb_pgfn_conjunta")
+    asyncio.run(_executar(solicitacao_id))
+
+    assert abertos == ["https://servicos.receitafederal.gov.br/servico/certidoes/#/home"]
+    with sessao() as s:
+        solicitacao = s.get(Solicitacao, solicitacao_id)
+        assert solicitacao.estado is EstadoSolicitacao.AGUARDANDO_ANEXO
+        assert any(r["tipo"] == "navegador_do_usuario" for r in solicitacao.registro)

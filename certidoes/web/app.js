@@ -880,6 +880,8 @@ function desenharConferencia(relatorio, destino) {
           el("table", {}, el("tbody", {}, fonte.campos_da_pagina.slice(0, 40).map((campo) =>
             el("tr", {}, [
               el("td", {}, campo.sugestao),
+              el("td", { class: "secundaria" },
+                campo.marcador + (campo.tipo ? `[${campo.tipo}]` : "")),
               el("td", {}, el("code", {}, campo.seletor)),
               el("td", { class: "secundaria" }, campo.rotulo || campo.texto || campo.alternativo || ""),
             ])

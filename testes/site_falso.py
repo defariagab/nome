@@ -35,6 +35,8 @@ PAGINA = """<!doctype html><html lang="pt-BR"><body>
   <input type="text" id="doc" name="doc">
   <img id="cap" src="{captcha}" alt="captcha">
   <input type="text" id="resp" name="resp">
+  <input type="text" id="escondido" name="escondido" style="display:none">
+  <input type="radio" id="tipo-cnpj" name="tipo" value="cnpj">
   <button type="submit" id="ok">Emitir</button>
 </form>
 </body></html>"""

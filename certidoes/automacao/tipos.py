@@ -60,12 +60,25 @@ class Fonte:
     def verificada(self) -> bool:
         return self.verificado_em is not None
 
+    #: passos que precisam do navegador controlado pelo sistema
+    ACOES_COM_NAVEGADOR = frozenset({
+        "abrir", "preencher", "selecionar", "clicar", "esperar", "captcha_imagem",
+        "captcha_interativo", "exigir_texto", "aguardar_download", "salvar_pagina_pdf",
+        "login_gov_br",
+    })
+
+    @property
+    def exige_navegador(self) -> bool:
+        """Uma fonte que só abre o navegador do usuário não precisa do nosso."""
+        return any(passo.acao in self.ACOES_COM_NAVEGADOR for passo in self.passos)
+
     @property
     def paralelizavel(self) -> bool:
         if self.perfil:
             return False
         return self._paralelizavel and not any(
-            passo.acao in {"captcha_interativo", "login_gov_br", "acao_manual"}
+            passo.acao in {"captcha_interativo", "login_gov_br", "acao_manual",
+                           "abrir_no_navegador"}
             for passo in self.passos
         )
 

@@ -69,6 +69,12 @@ organizados por titular e ano, e as sessões de navegador. Backup = copiar essa 
 Para o sistema renovar sozinho, sim. Fechando a janela preta, ele para — o que já
 foi arquivado continua lá.
 
+**Por que a CND Federal abre no meu navegador em vez de emitir sozinha?**
+Porque o portal da Receita Federal bloqueia acesso automatizado — ele diz isso
+na tela. Em vez de tentar enganá-lo, o sistema abre o endereço no seu navegador,
+onde o gov.br já está logado. Você emite e anexa o PDF; o controle de validade,
+o nome do arquivo e o aviso de vencimento continuam iguais.
+
 **E se eu não quiser automação nenhuma?**
 Funciona igual: você anexa os PDFs que emitiu à mão e o sistema controla validade,
 avisa dos vencimentos e monta o dossiê.

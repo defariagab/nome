@@ -26,7 +26,8 @@ from .config import config
 #: passos que produzem o documento — a conferência para antes deles
 ACOES_DOCUMENTO = {"aguardar_download", "salvar_pagina_pdf"}
 #: passos que exigem uma pessoa — a conferência confere e para
-ACOES_PESSOA = {"captcha_imagem", "captcha_interativo", "login_gov_br", "acao_manual"}
+ACOES_PESSOA = {"captcha_imagem", "captcha_interativo", "login_gov_br", "acao_manual",
+                "abrir_no_navegador"}
 #: passos que apenas navegam pela página
 ACOES_NAVEGACAO = {"abrir", "esperar", "preencher", "selecionar", "clicar"}
 ACOES_CONFERENCIA = {"exigir_texto"}
@@ -90,6 +91,37 @@ async def _existe(pagina, seletor: str, espera: int = 8000) -> bool:
         return True
     except Exception:
         return False
+
+
+async def _por_que_faltou(pagina, seletor: str) -> str:
+    """Distingue 'não existe na página' de 'existe, mas escondido'.
+
+    São problemas diferentes: o primeiro pede outro seletor, o segundo pede um
+    passo antes (abrir uma aba, escolher uma opção, esperar mais).
+    """
+    try:
+        elementos = await pagina.query_selector_all(seletor)
+    except Exception:
+        return "Campo não encontrado na página."
+    if not elementos:
+        return "Campo não encontrado na página."
+    descricao = await _descrever(elementos[0])
+    return (
+        f"O elemento existe ({descricao}), mas não está visível ou pronto para uso. "
+        "Provavelmente falta um passo antes — escolher uma opção, abrir uma aba ou esperar mais."
+    )
+
+
+async def _descrever(elemento) -> str:
+    """Diz o que o elemento é: a etiqueta e o tipo resolvem muita ambiguidade."""
+    try:
+        return await elemento.evaluate(
+            "el => el.tagName.toLowerCase()"
+            " + (el.type ? '[type=' + el.type + ']' : '')"
+            " + (el.id ? ' #' + el.id : '')"
+        )
+    except Exception:
+        return "elemento"
 
 
 async def _quem_casou(pagina, seletor: str) -> str:
@@ -184,7 +216,7 @@ async def conferir(fonte: Fonte, ctx: Contexto, visivel: bool = False) -> Confer
                 elif acao in {"preencher", "selecionar"}:
                     if not await _existe(pagina, seletor):
                         resultado.registrar(PassoConferido(
-                            acao, seletor, NAO_ENCONTRADO, "Campo não encontrado na página."))
+                            acao, seletor, NAO_ENCONTRADO, await _por_que_faltou(pagina, seletor)))
                         break
                     casou = await _quem_casou(pagina, seletor)
                     if acao == "preencher":
@@ -204,7 +236,7 @@ async def conferir(fonte: Fonte, ctx: Contexto, visivel: bool = False) -> Confer
                         break
                     if not await _existe(pagina, seletor):
                         resultado.registrar(PassoConferido(
-                            acao, seletor, NAO_ENCONTRADO, "Botão/link não encontrado."))
+                            acao, seletor, NAO_ENCONTRADO, await _por_que_faltou(pagina, seletor)))
                         break
                     await pagina.click(seletor)
                     resultado.registrar(PassoConferido(acao, seletor))
@@ -322,6 +354,11 @@ def em_texto(relatorio: dict) -> str:
             linhas.append("  Campos que a página tem hoje:")
             for campo in campos[:40]:
                 rotulo = campo.get("rotulo") or campo.get("texto") or campo.get("alternativo") or ""
-                linhas.append(f"    {campo['sugestao']:22} {campo['seletor']:44} {rotulo[:40]}")
+                marca = campo.get("marcador", "")
+                if campo.get("tipo"):
+                    marca += f"[{campo['tipo']}]"
+                linhas.append(
+                    f"    {campo['sugestao']:22} {marca:18} {campo['seletor']:40} {rotulo[:36]}"
+                )
         linhas.append("")
     return "\n".join(linhas)

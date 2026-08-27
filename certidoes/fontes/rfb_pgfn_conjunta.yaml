@@ -2,31 +2,21 @@ codigo: rfb_pgfn_conjunta
 nome: CND Federal — Receita Federal / PGFN
 url: https://servicos.receitafederal.gov.br/servico/certidoes/#/home
 resultado: anexo_manual
-ao_falhar: pedir_anexo
-# O login gov.br fica guardado neste perfil: entra uma vez e as emissões
-# seguintes reaproveitam a sessão.
-perfil: govbr
-# A conferência de 27/08/2026 mostrou que `#/home` é a página de entrada do
-# portal: ela não tem campo de CPF/CNPJ — tem busca, banner de cookies, botão
-# "Entrar com" (gov.br) e um hCaptcha. O caminho até o formulário da certidão
-# está atrás do login e ainda não foi mapeado.
+# O portal da Receita Federal recusa navegador automatizado. Em 27/08/2026 ele
+# respondeu, com todas as letras: "o seu acesso foi bloqueado por possuir
+# atributos que o caracteriza como um acesso automatizado".
 #
-# Para completar esta fonte: Configurações › Mapear um site novo, com este
-# endereço e uma espera de 90 segundos; entre com o gov.br e navegue até a tela
-# de emissão da certidão durante essa espera. A lista de campos que aparecer é
-# o que falta para os passos abaixo do login.
+# Esse bloqueio existe de propósito, e o sistema não tenta disfarçar-se para
+# passar por ele. A saída é melhor para o usuário, aliás: o sistema abre o
+# endereço no navegador que a pessoa já usa — onde a sessão gov.br dela
+# normalmente já está ativa — e continua cuidando do arquivamento, do nome do
+# arquivo, da leitura da validade e do controle de vencimento.
 passos:
-  - acao: abrir
+  - acao: abrir_no_navegador
     url: "{url}"
-  - acao: clicar
-    seletor: 'button:has-text("Aceitar")'
-    opcional: true
-  - acao: login_gov_br
-    instrucao: >-
-      Entre com o gov.br na janela do navegador que foi aberta no portal da
-      Fonte. O login fica guardado: nas próximas emissões você não precisa
-      repetir.
   - acao: acao_manual
     instrucao: >-
-      Conclua a emissão da CND Federal no navegador e salve o PDF. Depois anexe
-      o arquivo aqui para o sistema arquivar e controlar a validade.
+      Abri o portal da Receita Federal no seu navegador. Emita a CND Federal por
+      lá (entrando com o gov.br, se ele pedir) e salve o PDF. Depois anexe o
+      arquivo aqui: o sistema arquiva, lê a validade e passa a avisar do
+      vencimento como nas demais certidões.

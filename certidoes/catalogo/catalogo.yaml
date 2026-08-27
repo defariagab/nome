@@ -13,14 +13,15 @@
   validade_dias: 180
   requer_gov_br: false
   captcha: hcaptcha
-  modo: assistido
+  modo: manual
   fonte: rfb_pgfn_conjunta
   url: https://servicos.receitafederal.gov.br/servico/certidoes/#/home
   observacoes: >-
-    Emitida em conjunto por RFB e PGFN, para PF e PJ. O portal exige login gov.br,
-    que o sistema guarda num perfil de navegador: entra uma vez e as emissões
-    seguintes reaproveitam a sessão. O caminho do formulário, depois do login,
-    ainda precisa ser mapeado (Configurações › Mapear um site novo).
+    Emitida em conjunto por RFB e PGFN, para PF e PJ. O portal recusa navegador
+    automatizado ("acesso bloqueado por possuir atributos que o caracteriza como
+    um acesso automatizado"), e o sistema não tenta contornar isso: ele abre o
+    endereço no SEU navegador, onde o gov.br já está logado, e cuida do
+    arquivamento e do controle de validade do PDF que você anexar.
 
 - codigo: cndt
   nome: Certidão Negativa de Débitos Trabalhistas
