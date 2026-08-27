@@ -70,8 +70,8 @@ class Config:
         return PACOTE / "catalogo"
 
     @property
-    def pasta_receitas(self) -> Path:
-        return PACOTE / "receitas"
+    def pasta_fontes(self) -> Path:
+        return PACOTE / "fontes"
 
     @property
     def pasta_web(self) -> Path:

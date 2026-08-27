@@ -1,12 +1,12 @@
-"""Conferência das receitas contra os sites de verdade.
+"""Conferência das fontes contra os sites de verdade.
 
-Sites de órgão mudam sem aviso. Esta conferência percorre a receita no site
+Sites de órgão mudam sem aviso. Esta conferência percorre a fonte no site
 real e diz até onde ela ainda funciona — **sem emitir nada**: ela para antes
 do passo que geraria o documento e antes de pedir qualquer captcha.
 
 Quando um campo não é encontrado, o relatório traz a lista de campos que a
 página realmente tem, com o seletor de cada um. É o suficiente para consertar
-a receita sem precisar abrir o site de novo.
+a fonte sem precisar abrir o site de novo.
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ from pathlib import Path
 
 from .automacao.inspecao import _EXTRAIR, _classificar
 from .automacao.motor_navegador import Navegador
-from .automacao.receitas import listar_receitas
-from .automacao.tipos import Contexto, Receita
+from .automacao.fontes import listar_fontes
+from .automacao.tipos import Contexto, Fonte
 from .config import config
 
 #: passos que produzem o documento — a conferência para antes deles
@@ -116,21 +116,21 @@ async def _quem_casou(pagina, seletor: str) -> str:
         return ""
 
 
-async def conferir(receita: Receita, ctx: Contexto, visivel: bool = False) -> Conferencia:
-    """Percorre a receita no site real, sem emitir. Devolve o que encontrou."""
+async def conferir(fonte: Fonte, ctx: Contexto, visivel: bool = False) -> Conferencia:
+    """Percorre a fonte no site real, sem emitir. Devolve o que encontrou."""
     resultado = Conferencia(
-        codigo=receita.codigo,
-        nome=receita.nome,
-        url=ctx.aplicar(receita.url),
-        verificado_em=str(receita.verificado_em) if receita.verificado_em else None,
+        codigo=fonte.codigo,
+        nome=fonte.nome,
+        url=ctx.aplicar(fonte.url),
+        verificado_em=str(fonte.verificado_em) if fonte.verificado_em else None,
     )
 
     async with Navegador(visivel=visivel) as navegador:
         pagina = await navegador.nova_pagina()
 
-        for indice, passo in enumerate(receita.passos):
+        for indice, passo in enumerate(fonte.passos):
             acao = passo.acao
-            seguinte = receita.passos[indice + 1].acao if indice + 1 < len(receita.passos) else ""
+            seguinte = fonte.passos[indice + 1].acao if indice + 1 < len(fonte.passos) else ""
             seletor = ctx.aplicar(passo.get("seletor"))
 
             if not passo.se_aplica(ctx.variaveis):
@@ -166,7 +166,7 @@ async def conferir(receita: Receita, ctx: Contexto, visivel: bool = False) -> Co
 
             try:
                 if acao == "abrir":
-                    endereco = ctx.aplicar(passo.get("url")) or receita.url
+                    endereco = ctx.aplicar(passo.get("url")) or fonte.url
                     await pagina.goto(endereco, wait_until="domcontentloaded")
                     resultado.registrar(PassoConferido(acao, endereco))
 
@@ -236,12 +236,12 @@ def _resumir(conferencia: Conferencia) -> str:
     if conferencia.situacao == "quebrada":
         falhou = next((p for p in conferencia.passos if p.resultado in {NAO_ENCONTRADO, ERRO}), None)
         onde = f" no passo '{falhou.acao}'" if falhou else ""
-        return (f"A receita não corresponde mais ao site{onde}. O relatório traz os campos que a "
-                "página tem hoje, com o seletor de cada um, para corrigir a receita.")
+        return (f"A fonte não corresponde mais ao site{onde}. O relatório traz os campos que a "
+                "página tem hoje, com o seletor de cada um, para corrigir a fonte.")
     ultimo = conferencia.passos[-1].acao if conferencia.passos else ""
     if ultimo in ACOES_PESSOA:
-        return "Caminho conferido até o ponto em que uma pessoa precisa agir. A receita está de pé."
-    return "Caminho conferido até o botão de emissão. A receita está de pé."
+        return "Caminho conferido até o ponto em que uma pessoa precisa agir. A fonte está de pé."
+    return "Caminho conferido até o botão de emissão. A fonte está de pé."
 
 
 def _variaveis_de_teste() -> dict[str, str]:
@@ -250,38 +250,39 @@ def _variaveis_de_teste() -> dict[str, str]:
         "url": "", "url_tribunal": "",
         "documento": "11222333000181", "documento_formatado": "11.222.333/0001-81",
         "cpf": "", "cnpj": "11222333000181",
-        "nome": "Empresa de Teste", "email": "", "uf": "SP", "municipio": "São Paulo",
+        "nome": "Empresa de Teste", "email": "", "email_notificacao": "",
+        "uf": "SP", "municipio": "São Paulo",
         "codigo_ibge": "", "inscricao_estadual": "", "fgts_tipo_inscricao": "1",
     }
 
 
 async def conferir_todas(codigos: list[str] | None = None, visivel: bool | None = None) -> dict:
-    """Confere as receitas pedidas (ou todas) e monta o relatório."""
+    """Confere as fontes pedidas (ou todas) e monta o relatório."""
     # A conferência precisa reproduzir as condições da emissão real. Rodar
     # escondido dava resultado enganoso: alguns sites entregam outra página
     # para um navegador oculto — foi o que aconteceu com o FGTS.
     if visivel is None:
         visivel = config.navegador_visivel
     conferencias = []
-    for receita in listar_receitas():
-        if codigos and receita.codigo not in codigos:
+    for fonte in listar_fontes():
+        if codigos and fonte.codigo not in codigos:
             continue
 
         async def sem_perguntar(**_kwargs):  # a conferência nunca pede ajuda
             return ""
 
         variaveis = _variaveis_de_teste()
-        variaveis["url"] = receita.url
-        variaveis["url_tribunal"] = receita.url
+        variaveis["url"] = fonte.url
+        variaveis["url_tribunal"] = fonte.url
         ctx = Contexto(
             solicitacao_id=0, variaveis=variaveis, perguntar=sem_perguntar,
             registrar=lambda t, m: None, visivel=visivel,
         )
         try:
-            conferencias.append(await conferir(receita, ctx, visivel=visivel))
+            conferencias.append(await conferir(fonte, ctx, visivel=visivel))
         except Exception as erro:
             conferencias.append(Conferencia(
-                codigo=receita.codigo, nome=receita.nome, url=receita.url,
+                codigo=fonte.codigo, nome=fonte.nome, url=fonte.url,
                 situacao="quebrada",
                 mensagem=f"Não consegui abrir o site: {type(erro).__name__}: {str(erro).splitlines()[0][:160]}",
             ))
@@ -289,12 +290,12 @@ async def conferir_todas(codigos: list[str] | None = None, visivel: bool | None 
     return {
         "gerado_em": datetime.now().isoformat(timespec="seconds"),
         "versao": __import__("certidoes").__version__,
-        "receitas": [asdict(c) for c in conferencias],
+        "fontes": [asdict(c) for c in conferencias],
     }
 
 
 def salvar_relatorio(relatorio: dict) -> Path:
-    """Grava o relatório para o escritório enviar a quem for corrigir a receita."""
+    """Grava o relatório para o escritório enviar a quem for corrigir a fonte."""
     pasta = config.pasta_dados / "diagnostico"
     pasta.mkdir(parents=True, exist_ok=True)
     momento = relatorio["gerado_em"].replace(":", "-")
@@ -306,17 +307,17 @@ def salvar_relatorio(relatorio: dict) -> Path:
 
 def em_texto(relatorio: dict) -> str:
     """Versão legível do relatório, para colar num e-mail ou numa conversa."""
-    linhas = [f"# Conferência das receitas — {relatorio['gerado_em']}", ""]
-    for receita in relatorio["receitas"]:
+    linhas = [f"# Conferência das fontes — {relatorio['gerado_em']}", ""]
+    for fonte in relatorio["fontes"]:
         selo = {"pronta": "OK", "parcial": "ATENÇÃO", "quebrada": "PRECISA DE AJUSTE"}
-        linhas.append(f"## {receita['nome']} [{selo.get(receita['situacao'], receita['situacao'])}]")
-        linhas.append(f"- endereço: {receita['url']}")
-        linhas.append(f"- {receita['mensagem']}")
-        for passo in receita.get("passos", []):
+        linhas.append(f"## {fonte['nome']} [{selo.get(fonte['situacao'], fonte['situacao'])}]")
+        linhas.append(f"- endereço: {fonte['url']}")
+        linhas.append(f"- {fonte['mensagem']}")
+        for passo in fonte.get("passos", []):
             marca = {OK: "✓", PULADO: "–", NAO_ENCONTRADO: "✗", ERRO: "✗"}.get(passo["resultado"], "?")
             detalhe = f" — {passo['detalhe']}" if passo["detalhe"] else ""
             linhas.append(f"  {marca} {passo['acao']} {passo['seletor']}{detalhe}")
-        if campos := receita.get("campos_da_pagina"):
+        if campos := fonte.get("campos_da_pagina"):
             linhas.append("")
             linhas.append("  Campos que a página tem hoje:")
             for campo in campos[:40]:

@@ -1,4 +1,4 @@
-"""Descobre os campos de um site de órgão, para completar uma receita.
+"""Descobre os campos de um site de órgão, para completar uma fonte.
 
 Sites de tribunal, SEFAZ e prefeitura são todos diferentes. Em vez de exigir
 que alguém leia o HTML, esta ferramenta abre a página, lista os campos e já
@@ -49,7 +49,7 @@ _EXTRAIR = """
 
 
 def _classificar(campo: dict) -> str:
-    """Diz para que serve o campo, na linguagem da receita."""
+    """Diz para que serve o campo, na linguagem da fonte."""
     texto = " ".join([
         campo["rotulo"], campo["texto"], campo["seletor"],
         campo["fonte"], campo.get("alternativo", ""),

@@ -43,8 +43,38 @@ def sessao() -> Iterator[Session]:
         s.close()
 
 
+#: (tabela, coluna antiga, coluna nova) — renomeações já aplicadas em campo.
+#: Um banco que já existe precisa acompanhar o código sem perder nada.
+RENOMEACOES = [
+    ("tipo_certidao", "receita", "fonte"),
+]
+
+
+def _colunas(conexao, tabela: str) -> set[str]:
+    try:
+        linhas = conexao.exec_driver_sql(f"PRAGMA table_info({tabela})").fetchall()
+    except Exception:
+        return set()
+    return {linha[1] for linha in linhas}
+
+
+def migrar() -> None:
+    """Ajusta bancos criados por versões anteriores, preservando os dados."""
+    if not config.url_banco.startswith("sqlite"):
+        return  # em outro banco, a migração é feita pela ferramenta do projeto
+    with motor.begin() as conexao:
+        for tabela, antiga, nova in RENOMEACOES:
+            colunas = _colunas(conexao, tabela)
+            if antiga in colunas and nova not in colunas:
+                conexao.exec_driver_sql(
+                    f'ALTER TABLE {tabela} RENAME COLUMN "{antiga}" TO "{nova}"'
+                )
+
+
 def iniciar() -> None:
-    """Cria as tabelas e garante a organização padrão."""
+    """Cria as tabelas, migra o que veio de versões anteriores e garante a
+    organização padrão."""
+    migrar()
     Base.metadata.create_all(motor)
     with sessao() as s:
         if not s.scalar(select(Organizacao).limit(1)):

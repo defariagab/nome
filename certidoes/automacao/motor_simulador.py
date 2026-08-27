@@ -1,4 +1,4 @@
-"""Motor de demonstração: executa as receitas sem sair da máquina.
+"""Motor de demonstração: executa as fontes sem sair da máquina.
 
 Serve para conhecer o sistema, treinar a equipe e rodar os testes sem
 depender dos sites dos órgãos — inclusive o passo do captcha, que continua
@@ -16,7 +16,7 @@ from datetime import date, timedelta
 from ..modelos import SituacaoCertidao, TipoDesafio
 from .extracao import analisar
 from .pdf_simples import gerar
-from .tipos import Contexto, ErroAutomacao, Receita, Resultado
+from .tipos import Contexto, ErroAutomacao, Fonte, Resultado
 
 ATRASO = float(0.2)  # simula a lentidão dos portais
 
@@ -41,10 +41,10 @@ def _captcha_svg(texto: str) -> str:
     return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
 
 
-async def executar(receita: Receita, ctx: Contexto) -> Resultado:
-    aguarda_anexo = receita.resultado == "anexo_manual"
+async def executar(fonte: Fonte, ctx: Contexto) -> Resultado:
+    aguarda_anexo = fonte.resultado == "anexo_manual"
 
-    for passo in receita.passos:
+    for passo in fonte.passos:
         ctx.registrar("passo", f"{passo.acao} (simulado)")
         await asyncio.sleep(ATRASO)
 
@@ -96,7 +96,7 @@ async def executar(receita: Receita, ctx: Contexto) -> Resultado:
             "",
             "DOCUMENTO DE DEMONSTRACAO - SEM VALOR LEGAL",
         ],
-        titulo=receita.nome,
+        titulo=fonte.nome,
     )
     dados = analisar(documento)
     return Resultado(

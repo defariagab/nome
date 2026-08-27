@@ -57,6 +57,13 @@ proibidos, corta nomes longos demais e nunca deixa uma certidão sobrescrever
 outra de conteúdo diferente. Os arquivos continuam organizados em pastas por
 titular e ano.
 
+### E-mail do escritório
+
+Alguns órgãos mandam cópia da certidão por e-mail — o CJF é um deles. Em
+**Configurações**, o *E-mail do escritório* define para onde essa cópia vai:
+por padrão, para quem acompanha o vencimento, e não para o cliente. Em branco,
+usa o e-mail do titular. Nas fontes, é a variável `{email_notificacao}`.
+
 ### Validade: o documento manda
 
 `validade_dias` do catálogo é só o padrão do órgão. Quando o PDF informa a data de
@@ -64,7 +71,7 @@ validade, é a data do PDF que vale — é ela que o fiscal vai olhar.
 
 ## Automação, sem fingimento
 
-Cada órgão vira uma **receita** declarativa (`certidoes/receitas/*.yaml`), executada
+Cada órgão vira uma **fonte** declarativa (`certidoes/fontes/*.yaml`), executada
 por um navegador real:
 
 ```yaml
@@ -114,7 +121,7 @@ sistema não quebra, não contorna e não terceiriza captcha, porque esse contro
 existe justamente para exigir presença humana, e burlá-lo em sistema público não
 é caminho que este projeto siga.
 
-**2. Login uma vez, muitas emissões.** Uma receita pode declarar `perfil: govbr`.
+**2. Login uma vez, muitas emissões.** Uma fonte pode declarar `perfil: govbr`.
 O navegador guarda a sessão daquele perfil: você entra no gov.br **uma vez** e as
 emissões seguintes reaproveitam o login, sem novo captcha e sem nova senha. O
 passo `login_gov_br` ainda aceita `sinal_logado` — um seletor que só existe na
@@ -133,10 +140,10 @@ rodando normalmente.
 
 ### Quando o site muda
 
-Uma receita pode declarar `ao_falhar: pedir_anexo`. Se um passo não encontra o
+Uma fonte pode declarar `ao_falhar: pedir_anexo`. Se um passo não encontra o
 que esperava, em vez de falhar o sistema deixa o navegador aberto **na página
 certa**, avisa que o site mudou e pede o PDF. Você conclui à mão e o arquivo é
-arquivado normalmente — a receita desatualizada vira um contratempo, não um beco
+arquivado normalmente — a fonte desatualizada vira um contratempo, não um beco
 sem saída.
 
 Onde não há automação (ou ela ainda não foi validada), o sistema **abre o site
@@ -150,10 +157,10 @@ como qualquer outro — o controle de validade nunca depende da automação exis
 | **CNDT** (TST) | **Conferida no escritório em 27/08/2026**: caminho inteiro reconhecido, do início ao captcha. |
 | **CRF/FGTS** (Caixa) | Seletores corretos (conferidos no HTML da página em 27/08/2026). A primeira conferência falhou por rodar com o navegador escondido, e o site entregou outra página — corrigido: a conferência agora roda visível, como a emissão real. |
 | **CND Federal** (RFB/PGFN) | O portal exige **login gov.br**, guardado no perfil `govbr`: entra uma vez e as emissões seguintes reaproveitam a sessão. O caminho do formulário, depois do login, ainda precisa ser mapeado. |
-| **Certidão Unificada da Justiça Federal** (CJF) | Campos conferidos em 27/08/2026: CPF e CNPJ ficam em campos separados (daí o `quando:`), e o site usa reCAPTCHA. Falta confirmar se o documento vem por download ou por e-mail. Cobre as Regiões **exceto o TRF6**. |
-| **Estaduais e municipais** | Cadastradas como modelo no catálogo, sem receita: use **Configurações › Mapear um site novo** para descobrir os campos do seu tribunal/SEFAZ/prefeitura. |
+| **Certidão Unificada da Justiça Federal** (CJF) | Campos conferidos em 27/08/2026: CPF e CNPJ ficam em campos separados (daí o `quando:`), e o site usa reCAPTCHA. Emite na hora e ainda manda cópia por e-mail. Cobre as Regiões **exceto o TRF6**. |
+| **Estaduais e municipais** | Cadastradas como modelo no catálogo, sem fonte: use **Configurações › Mapear um site novo** para descobrir os campos do seu tribunal/SEFAZ/prefeitura. |
 
-Honestidade sobre o estado atual: **as receitas da CNDT e do FGTS foram escritas a
+Honestidade sobre o estado atual: **as fontes da CNDT e do FGTS foram escritas a
 partir dos formulários reais**, e o motor de navegador é testado de ponta a ponta
 (preencher, ler captcha, receber recusa, repetir, baixar o PDF) contra uma réplica
 local dos portais. As da Receita e do CJF foram escritas sem poder abrir as
@@ -162,15 +169,15 @@ recusa conexões de fora de uma rede comum. As quatro precisam de uma execução
 na sua máquina; as duas últimas, de um ajuste de seletores. Por isso todas
 declaram `ao_falhar: pedir_anexo`: mesmo antes do acerto fino, o pior caso é você
 concluir na janela já aberta na página certa. Cada tipo mostra no Catálogo a data
-em que sua receita foi conferida.
+em que sua fonte foi conferida.
 
-### Conferir se as receitas ainda funcionam
+### Conferir se as fontes ainda funcionam
 
-**Configurações › Conferir as receitas** percorre cada site de órgão e diz até onde
-a receita ainda funciona — **sem emitir nada**: para antes do botão de emissão e
+**Configurações › Conferir as fontes** percorre cada site de órgão e diz até onde
+a fonte ainda funciona — **sem emitir nada**: para antes do botão de emissão e
 antes de qualquer captcha. Quando um campo não é achado, o relatório traz a lista
 dos campos que a página tem hoje, com o seletor de cada um, mais uma captura da
-tela: é o suficiente para corrigir a receita sem abrir o site de novo. O relatório
+tela: é o suficiente para corrigir a fonte sem abrir o site de novo. O relatório
 fica em `.certidoes/diagnostico/` em duas versões (JSON e texto), para enviar a
 quem for consertar. Pela linha de comando:
 
@@ -200,7 +207,7 @@ recente — é o documento que a habilitação de uma licitação pede.
 o tempo que você pedir (para navegar até a tela certa, inclusive passando por um
 login) e lista cada campo da página com o seletor pronto e um palpite do que ele
 serve — "preencher (documento)", "clicar", "captcha_imagem", "captcha_interativo".
-É com essa lista que se completa a receita de um tribunal ou de uma prefeitura.
+É com essa lista que se completa a fonte de um tribunal ou de uma prefeitura.
 Pela linha de comando, o mesmo:
 
 ```
@@ -258,10 +265,10 @@ certidoes/
   fila.py         executa as solicitações, uma a uma
   agenda.py       renovação automática antes do vencimento
   nomeacao.py     padrão de nome dos PDFs arquivados
-  diagnostico.py  conferência das receitas contra os sites reais
+  diagnostico.py  conferência das fontes contra os sites reais
   dossie.py       PDF único com as certidões vigentes de um titular
   catalogo/       catálogo de certidões (YAML)
-  receitas/       uma receita por órgão (YAML)
+  fontes/       uma fonte por órgão (YAML)
   automacao/      motor de navegador, simulador, captcha, inspeção e leitura do PDF
   api/            FastAPI
   web/            painel (HTML/CSS/JS, sem build)
@@ -270,7 +277,7 @@ testes/           inclui uma réplica local de portal para testar o navegador
 
 ## Próximos passos naturais
 
-1. Rodar **Configurações › Conferir as receitas** na máquina do escritório e
+1. Rodar **Configurações › Conferir as fontes** na máquina do escritório e
    ajustar os seletores da Receita e do CJF com o relatório gerado.
 2. Mapear o TJ estadual de maior volume no escritório e a SEFAZ da UF principal.
 3. Aviso por e-mail dos vencimentos (hoje o alerta é o painel).

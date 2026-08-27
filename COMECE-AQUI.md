@@ -23,9 +23,9 @@ janela e dê dois cliques em `demonstracao.bat` (Windows) ou rode
 `python -m certidoes demonstracao`: ele cria um escritório fictício com casos
 variados, marcados como **sem valor legal**.
 
-## 3. Confira as receitas
+## 3. Confira as fontes
 
-No painel, vá em **Configurações › Conferir as receitas** e clique em
+No painel, vá em **Configurações › Conferir as fontes** e clique em
 **Conferir agora**.
 
 O sistema abre cada site de órgão e verifica se ainda sabe operá-lo. **Ele não
@@ -34,7 +34,7 @@ um ou dois minutos.
 
 No fim aparece um resultado por certidão:
 
-- **A receita está de pé** — o sistema consegue emitir essa certidão.
+- **A fonte está de pé** — o sistema consegue emitir essa certidão.
 - **Precisa de ajuste** — o órgão mudou o site. Clique em **Baixar relatório** e
   envie o arquivo para quem cuida do sistema: ele traz os campos que a página tem
   hoje e o seletor de cada um, que é exatamente o que falta para consertar.
@@ -56,6 +56,10 @@ certidões ela precisa manter vigentes. A partir daí:
 ---
 
 ## Perguntas rápidas
+
+**Alguns órgãos mandam a certidão por e-mail. Para onde vai?**
+Para o *E-mail do escritório*, que você define em Configurações. Em branco, vai
+para o e-mail do titular.
 
 **Onde ficam meus arquivos?**
 Numa pasta só, `.certidoes` dentro da sua pasta de usuário: banco de dados, PDFs

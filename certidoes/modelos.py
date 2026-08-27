@@ -149,9 +149,9 @@ class TipoCertidao(Base):
     requer_certificado: Mapped[bool] = mapped_column(Boolean, default=False)
     captcha: Mapped[Captcha] = mapped_column(Enum(Captcha), default=Captcha.DESCONHECIDO)
     modo: Mapped[ModoObtencao] = mapped_column(Enum(ModoObtencao), default=ModoObtencao.MANUAL)
-    receita: Mapped[str | None] = mapped_column(String(60))
+    fonte: Mapped[str | None] = mapped_column(String(60))
     url: Mapped[str | None] = mapped_column(String(500))
-    #: quando os seletores da receita foram conferidos contra o site real
+    #: quando os seletores da fonte foram conferidos contra o site real
     verificado_em: Mapped[date | None] = mapped_column(Date)
     observacoes: Mapped[str | None] = mapped_column(Text)
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)

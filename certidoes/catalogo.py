@@ -13,7 +13,7 @@ from .modelos import Captcha, Esfera, ModoObtencao, TipoCertidao
 #: pela tela sem que a próxima atualização do catálogo desfaça a alteração.
 CAMPOS_DO_CATALOGO = {
     "nome", "sigla", "orgao", "esfera", "aplica_pf", "aplica_pj",
-    "requer_gov_br", "requer_certificado", "captcha", "modo", "receita",
+    "requer_gov_br", "requer_certificado", "captcha", "modo", "fonte",
     "verificado_em", "observacoes",
 }
 

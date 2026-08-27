@@ -38,7 +38,7 @@ class Passo:
 
 
 @dataclass(frozen=True)
-class Receita:
+class Fonte:
     codigo: str
     nome: str
     url: str
@@ -84,7 +84,7 @@ class PerguntarHumano(Protocol):
 
 @dataclass
 class Contexto:
-    """Tudo o que a execução de uma receita precisa saber e pode fazer."""
+    """Tudo o que a execução de uma fonte precisa saber e pode fazer."""
 
     solicitacao_id: int
     variaveis: dict[str, str]
@@ -94,7 +94,7 @@ class Contexto:
     visivel: bool = True
 
     def aplicar(self, texto: str | None) -> str:
-        """Substitui {variaveis} de um valor da receita."""
+        """Substitui {variaveis} de um valor da fonte."""
         if not texto:
             return ""
         resultado = texto

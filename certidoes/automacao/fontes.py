@@ -1,4 +1,4 @@
-"""Carregamento das receitas declarativas (YAML)."""
+"""Carregamento das fontes declarativas (YAML)."""
 
 from __future__ import annotations
 
@@ -8,13 +8,13 @@ from pathlib import Path
 import yaml
 
 from ..config import config
-from .tipos import Passo, Receita
+from .tipos import Passo, Fonte
 
 
-def _converter(bruto: dict) -> Receita:
+def _converter(bruto: dict) -> Fonte:
     passos = [Passo(acao=p["acao"], dados={k: v for k, v in p.items() if k != "acao"})
               for p in bruto.get("passos", [])]
-    return Receita(
+    return Fonte(
         codigo=bruto["codigo"],
         nome=bruto.get("nome", bruto["codigo"]),
         url=bruto.get("url", ""),
@@ -28,15 +28,15 @@ def _converter(bruto: dict) -> Receita:
 
 
 @lru_cache(maxsize=None)
-def carregar_receita(codigo: str) -> Receita | None:
-    caminho = config.pasta_receitas / f"{codigo}.yaml"
+def carregar_fonte(codigo: str) -> Fonte | None:
+    caminho = config.pasta_fontes / f"{codigo}.yaml"
     if not caminho.exists():
         return None
     return _converter(yaml.safe_load(caminho.read_text(encoding="utf-8")))
 
 
-def listar_receitas() -> list[Receita]:
-    receitas = []
-    for caminho in sorted(Path(config.pasta_receitas).glob("*.yaml")):
-        receitas.append(_converter(yaml.safe_load(caminho.read_text(encoding="utf-8"))))
-    return receitas
+def listar_fontes() -> list[Fonte]:
+    fontes = []
+    for caminho in sorted(Path(config.pasta_fontes).glob("*.yaml")):
+        fontes.append(_converter(yaml.safe_load(caminho.read_text(encoding="utf-8"))))
+    return fontes

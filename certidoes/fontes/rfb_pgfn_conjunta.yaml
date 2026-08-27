@@ -11,7 +11,7 @@ perfil: govbr
 # "Entrar com" (gov.br) e um hCaptcha. O caminho até o formulário da certidão
 # está atrás do login e ainda não foi mapeado.
 #
-# Para completar esta receita: Configurações › Mapear um site novo, com este
+# Para completar esta fonte: Configurações › Mapear um site novo, com este
 # endereço e uma espera de 90 segundos; entre com o gov.br e navegue até a tela
 # de emissão da certidão durante essa espera. A lista de campos que aparecer é
 # o que falta para os passos abaixo do login.
@@ -24,7 +24,7 @@ passos:
   - acao: login_gov_br
     instrucao: >-
       Entre com o gov.br na janela do navegador que foi aberta no portal da
-      Receita. O login fica guardado: nas próximas emissões você não precisa
+      Fonte. O login fica guardado: nas próximas emissões você não precisa
       repetir.
   - acao: acao_manual
     instrucao: >-

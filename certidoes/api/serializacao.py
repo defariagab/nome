@@ -39,7 +39,7 @@ def tipo(tc: TipoCertidao) -> dict:
         "requer_certificado": tc.requer_certificado,
         "captcha": tc.captcha.value,
         "modo": tc.modo.value,
-        "receita": tc.receita,
+        "fonte": tc.fonte,
         "url": tc.url,
         "verificado_em": tc.verificado_em.isoformat() if tc.verificado_em else None,
         "observacoes": tc.observacoes,

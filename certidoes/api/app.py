@@ -399,14 +399,18 @@ def varrer_renovacoes():
 
 class Preferencias(BaseModel):
     padrao_nome_arquivo: str
+    #: para onde vão as cópias que os órgãos enviam por e-mail
+    email_escritorio: str = ""
 
 
 @app.get("/api/preferencias")
 def ler_preferencias():
     with sessao() as s:
         padrao = servicos.preferencia(s, "padrao_nome_arquivo", nomeacao.PADRAO)
+        email = servicos.preferencia(s, "email_escritorio")
     return {
         "padrao_nome_arquivo": padrao,
+        "email_escritorio": email,
         "padrao_do_sistema": nomeacao.PADRAO,
         "exemplo": nomeacao.exemplo(padrao),
         "campos": nomeacao.CAMPOS,
@@ -420,9 +424,17 @@ def salvar_preferencias(dados: Preferencias):
         padrao = nomeacao.validar(dados.padrao_nome_arquivo)
     except ValueError as erro:
         raise servicos.ErroDeUso(str(erro)) from erro
+    email = dados.email_escritorio.strip()
+    if email and ("@" not in email or " " in email):
+        raise servicos.ErroDeUso("O e-mail do escritório não parece válido.")
     with sessao() as s:
         servicos.definir_preferencia(s, "padrao_nome_arquivo", padrao)
-    return {"padrao_nome_arquivo": padrao, "exemplo": nomeacao.exemplo(padrao)}
+        servicos.definir_preferencia(s, "email_escritorio", email)
+    return {
+        "padrao_nome_arquivo": padrao,
+        "email_escritorio": email,
+        "exemplo": nomeacao.exemplo(padrao),
+    }
 
 
 class PedidoConferencia(BaseModel):
@@ -432,15 +444,15 @@ class PedidoConferencia(BaseModel):
 
 
 @app.post("/api/diagnostico")
-async def conferir_receitas(pedido: PedidoConferencia):
-    """Percorre as receitas nos sites reais, sem emitir nada, e guarda o relatório."""
+async def conferir_fontes(pedido: PedidoConferencia):
+    """Percorre as fontes nos sites reais, sem emitir nada, e guarda o relatório."""
     from ..diagnostico import conferir_todas, salvar_relatorio
 
     try:
         relatorio = await conferir_todas(pedido.codigos or None, visivel=pedido.visivel)
     except Exception as erro:
         raise servicos.ErroDeUso(
-            f"Não consegui conferir as receitas: {erro}. Confira se o navegador do "
+            f"Não consegui conferir as fontes: {erro}. Confira se o navegador do "
             "Playwright está instalado."
         ) from erro
     caminho = salvar_relatorio(relatorio)
@@ -450,7 +462,7 @@ async def conferir_receitas(pedido: PedidoConferencia):
 
 @app.get("/api/diagnostico/relatorio")
 def baixar_relatorio():
-    """Entrega o relatório mais recente, para enviar a quem vai corrigir a receita."""
+    """Entrega o relatório mais recente, para enviar a quem vai corrigir a fonte."""
     pasta = config.pasta_dados / "diagnostico"
     arquivos_md = sorted(pasta.glob("conferencia-*.md")) if pasta.exists() else []
     if not arquivos_md:
@@ -467,7 +479,7 @@ class PedidoInspecao(BaseModel):
 
 @app.post("/api/inspecionar")
 async def inspecionar_site(pedido: PedidoInspecao):
-    """Abre o site do órgão e lista os campos, para montar/corrigir a receita."""
+    """Abre o site do órgão e lista os campos, para montar/corrigir a fonte."""
     if not pedido.url.startswith(("http://", "https://")):
         raise servicos.ErroDeUso("Informe o endereço completo, começando com https://")
     from ..automacao.inspecao import inspecionar

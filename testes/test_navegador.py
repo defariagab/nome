@@ -13,7 +13,7 @@ import asyncio
 import pytest
 
 from certidoes.automacao.motor import executar
-from certidoes.automacao.tipos import Contexto, Passo, Receita
+from certidoes.automacao.tipos import Contexto, Passo, Fonte
 from certidoes.modelos import SituacaoCertidao
 from testes.site_falso import SiteFalso
 
@@ -59,7 +59,7 @@ def _contexto(url: str, respostas: list[str], captcha_de) -> Contexto:
 def test_preenche_resolve_captcha_e_baixa_o_pdf():
     from testes import site_falso
 
-    receita = Receita(
+    fonte = Fonte(
         codigo="teste", nome="Certidão de teste", url="{url}", resultado="download",
         passos=[
             Passo("abrir", {"url": "{url}"}),
@@ -73,7 +73,7 @@ def test_preenche_resolve_captcha_e_baixa_o_pdf():
     )
     with SiteFalso() as site:
         contexto = _contexto(site.url, [], lambda: site_falso.RESPOSTA_CAPTCHA["valor"])
-        resultado = asyncio.run(executar(receita, contexto, motor="navegador"))
+        resultado = asyncio.run(executar(fonte, contexto, motor="navegador"))
 
     assert resultado.sucesso
     assert resultado.documento.startswith(b"%PDF")
@@ -86,7 +86,7 @@ def test_preenche_resolve_captcha_e_baixa_o_pdf():
 def test_captcha_errado_e_repetido_ate_acertar():
     from testes import site_falso
 
-    receita = Receita(
+    fonte = Fonte(
         codigo="teste", nome="Certidão de teste", url="{url}", resultado="download",
         passos=[
             Passo("abrir", {"url": "{url}"}),
@@ -100,14 +100,14 @@ def test_captcha_errado_e_repetido_ate_acertar():
     )
     with SiteFalso() as site:
         contexto = _contexto(site.url, ["errado"], lambda: site_falso.RESPOSTA_CAPTCHA["valor"])
-        resultado = asyncio.run(executar(receita, contexto, motor="navegador"))
+        resultado = asyncio.run(executar(fonte, contexto, motor="navegador"))
 
     assert resultado.sucesso  # errou uma vez e o sistema refez sozinho
 
 
 @pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
 def test_pagina_de_resultado_vira_pdf():
-    receita = Receita(
+    fonte = Fonte(
         codigo="crf", nome="Certificado de teste", url="{url}/crf", resultado="pagina_pdf",
         passos=[
             Passo("abrir", {"url": "{url}/crf"}),
@@ -121,7 +121,7 @@ def test_pagina_de_resultado_vira_pdf():
         ],
     )
     with SiteFalso() as site:
-        resultado = asyncio.run(executar(receita, _contexto(site.url, [], lambda: ""), motor="navegador"))
+        resultado = asyncio.run(executar(fonte, _contexto(site.url, [], lambda: ""), motor="navegador"))
 
     assert resultado.documento.startswith(b"%PDF")
     assert resultado.valida_ate.isoformat() == "2026-09-26"
@@ -129,8 +129,8 @@ def test_pagina_de_resultado_vira_pdf():
 
 @pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
 def test_site_mudou_o_sistema_pede_o_anexo_em_vez_de_falhar():
-    """Receita desatualizada não pode virar beco sem saída para o usuário."""
-    receita = Receita(
+    """Fonte desatualizada não pode virar beco sem saída para o usuário."""
+    fonte = Fonte(
         codigo="teste", nome="Certidão de teste", url="{url}", resultado="download",
         ao_falhar="pedir_anexo",
         passos=[
@@ -151,7 +151,7 @@ def test_site_mudou_o_sistema_pede_o_anexo_em_vez_de_falhar():
             variaveis={"url": site.url, "documento": "11222333000181"},
             perguntar=perguntar, registrar=lambda t, m: None, visivel=False,
         )
-        resultado = asyncio.run(executar(receita, contexto, motor="navegador"))
+        resultado = asyncio.run(executar(fonte, contexto, motor="navegador"))
 
     assert resultado.aguarda_anexo
     assert resultado.sucesso

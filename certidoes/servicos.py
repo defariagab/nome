@@ -239,8 +239,14 @@ def solicitar(s: Session, titular_id: int, tipo_id: int, origem: str = "manual")
     return solicitacao
 
 
-def variaveis_do_contexto(titular: Titular, tipo: TipoCertidao) -> dict[str, str]:
+def variaveis_do_contexto(
+    titular: Titular, tipo: TipoCertidao, email_escritorio: str = ""
+) -> dict[str, str]:
     return {
+        # Alguns órgãos mandam cópia da certidão por e-mail. Por padrão ela vai
+        # para o escritório, não para o cliente — quem acompanha o vencimento é
+        # quem precisa recebê-la.
+        "email_notificacao": (email_escritorio or titular.email or "").strip(),
         "url": tipo.url or "",
         "url_tribunal": tipo.url or "",
         "documento": titular.documento,

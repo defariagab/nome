@@ -227,7 +227,7 @@ function primeirosPassos() {
       "A pessoa ou empresa e quais certidões ela precisa manter vigentes.",
       el("button", { class: "botao primario miudo", onclick: () => formularioTitular() },
         "Cadastrar titular")),
-    passo(2, "Confira as receitas",
+    passo(2, "Confira as fontes",
       "O sistema abre cada site de órgão e verifica se ainda sabe operá-lo. Não emite nada.",
       el("button", { class: "botao secundario miudo", onclick: () => irPara("configuracoes") },
         "Ir para a conferência")),
@@ -560,8 +560,8 @@ function desenharCatalogo() {
       tipo.captcha !== "nenhum" ? el("span", { class: "etiqueta" }, `captcha ${tipo.captcha}`) : null,
       el("span", { class: "etiqueta" }, tipo.modo),
       tipo.verificado_em
-        ? el("span", { class: "etiqueta" }, `receita conferida em ${dataBR(tipo.verificado_em)}`)
-        : el("span", { class: "etiqueta" }, "receita não conferida"),
+        ? el("span", { class: "etiqueta" }, `fonte conferida em ${dataBR(tipo.verificado_em)}`)
+        : el("span", { class: "etiqueta" }, "fonte não conferida"),
     ].filter(Boolean);
     return el("tr", {}, [
       el("td", {}, [
@@ -725,6 +725,10 @@ async function enviarResposta(resposta) {
 async function desenharConfiguracoes() {
   const preferencias = await api("/api/preferencias");
   const entrada = el("input", { type: "text", value: preferencias.padrao_nome_arquivo });
+  const entradaEmail = el("input", {
+    type: "email", value: preferencias.email_escritorio || "",
+    placeholder: "contato@seuescritorio.adv.br",
+  });
   const previa = el("code", {}, preferencias.exemplo);
 
   entrada.addEventListener("input", () => {
@@ -734,10 +738,14 @@ async function desenharConfiguracoes() {
   const salvar = el("button", { class: "botao primario" }, "Salvar padrão");
   salvar.addEventListener("click", async () => {
     const r = await api("/api/preferencias", {
-      method: "PUT", body: JSON.stringify({ padrao_nome_arquivo: entrada.value }),
+      method: "PUT",
+      body: JSON.stringify({
+        padrao_nome_arquivo: entrada.value,
+        email_escritorio: entradaEmail.value,
+      }),
     });
     previa.textContent = r.exemplo;
-    avisar("Padrão de nome salvo. Vale para as próximas certidões arquivadas.", "bom");
+    avisar("Configurações salvas. Valem para as próximas certidões.", "bom");
   });
 
   const campos = el("div", { class: "escolhas", style: "max-height:200px" },
@@ -780,7 +788,7 @@ async function desenharConfiguracoes() {
     }
   });
 
-  /* --- conferência das receitas contra os sites reais --- */
+  /* --- conferência das fontes contra os sites reais --- */
   const verNavegador = el("input", { type: "checkbox", checked: "checked" });
   const resultadoConferencia = el("div", {});
   const conferir = el("button", { class: "botao primario" }, "Conferir agora");
@@ -803,10 +811,10 @@ async function desenharConfiguracoes() {
 
   $("#conteudo-configuracoes").replaceChildren(
     el("div", { class: "bloco" }, [
-      el("div", { class: "bloco-cabecalho" }, el("h2", {}, "Conferir as receitas")),
+      el("div", { class: "bloco-cabecalho" }, el("h2", {}, "Conferir as fontes")),
       el("div", { style: "padding:18px" }, [
         el("p", { class: "apoio" },
-          "Percorre cada site de órgão e diz até onde a receita ainda funciona. Não emite nada: " +
+          "Percorre cada site de órgão e diz até onde a fonte ainda funciona. Não emite nada: " +
           "para antes do botão de emissão e antes de qualquer captcha. Rode depois de instalar e " +
           "sempre que uma emissão começar a falhar."),
         el("label", { class: "alternador", style: "margin:10px 0" },
@@ -824,6 +832,12 @@ async function desenharConfiguracoes() {
         el("div", { class: "campo" }, [el("label", {}, "Modelo"), entrada]),
         el("div", { class: "campo" }, [el("label", {}, "Fica assim"), el("div", { class: "registro" }, previa)]),
         el("div", { class: "campo" }, [el("label", {}, "Campos disponíveis"), campos]),
+        el("div", { class: "campo" }, [
+          el("label", {}, ["E-mail do escritório ",
+            el("span", { class: "dica" },
+              "— alguns órgãos mandam cópia da certidão por e-mail; em branco, vai para o e-mail do titular")]),
+          entradaEmail,
+        ]),
         salvar,
       ]),
     ]),
@@ -846,24 +860,24 @@ async function desenharConfiguracoes() {
 }
 
 const SELO_CONFERENCIA = {
-  pronta: ["vigente", "A receita está de pé"],
+  pronta: ["vigente", "A fonte está de pé"],
   parcial: ["vence_em_breve", "Atenção"],
   quebrada: ["vencida", "Precisa de ajuste"],
 };
 
 function desenharConferencia(relatorio, destino) {
-  const cartoes = relatorio.receitas.map((receita) => {
-    const [classe, rotulo] = SELO_CONFERENCIA[receita.situacao] || ["ausente", receita.situacao];
-    const passos = (receita.passos || []).map((passo) => {
+  const cartoes = relatorio.fontes.map((fonte) => {
+    const [classe, rotulo] = SELO_CONFERENCIA[fonte.situacao] || ["ausente", fonte.situacao];
+    const passos = (fonte.passos || []).map((passo) => {
       const marca = { ok: "✓", pulado: "–", nao_encontrado: "✗", erro: "✗" }[passo.resultado] || "?";
       return el("div", { class: "secundaria" },
         `${marca} ${passo.acao} ${passo.seletor || ""}${passo.detalhe ? " — " + passo.detalhe : ""}`);
     });
-    const campos = (receita.campos_da_pagina || []).length
+    const campos = (fonte.campos_da_pagina || []).length
       ? el("details", { style: "margin-top:10px" }, [
           el("summary", { class: "secundaria" },
-            `Campos que a página tem hoje (${receita.campos_da_pagina.length})`),
-          el("table", {}, el("tbody", {}, receita.campos_da_pagina.slice(0, 40).map((campo) =>
+            `Campos que a página tem hoje (${fonte.campos_da_pagina.length})`),
+          el("table", {}, el("tbody", {}, fonte.campos_da_pagina.slice(0, 40).map((campo) =>
             el("tr", {}, [
               el("td", {}, campo.sugestao),
               el("td", {}, el("code", {}, campo.seletor)),
@@ -875,26 +889,26 @@ function desenharConferencia(relatorio, destino) {
     return el("div", { style: "border-top:1px solid var(--borda); padding:14px 0" }, [
       el("div", {}, [
         el("span", { class: `pilula ${classe}` }, rotulo),
-        el("strong", { style: "margin-left:8px" }, receita.nome),
+        el("strong", { style: "margin-left:8px" }, fonte.nome),
       ]),
-      el("p", { class: "apoio", style: "margin:6px 0" }, receita.mensagem),
+      el("p", { class: "apoio", style: "margin:6px 0" }, fonte.mensagem),
       ...passos,
       campos,
-      receita.captura
+      fonte.captura
         ? el("details", {}, [
             el("summary", { class: "secundaria" }, "Ver a tela no momento da falha"),
-            el("img", { src: receita.captura, style: "max-width:100%; border:1px solid var(--borda); border-radius:6px; margin-top:8px" }),
+            el("img", { src: fonte.captura, style: "max-width:100%; border:1px solid var(--borda); border-radius:6px; margin-top:8px" }),
           ])
         : null,
     ]);
   });
 
-  const quebradas = relatorio.receitas.filter((r) => r.situacao === "quebrada").length;
+  const quebradas = relatorio.fontes.filter((r) => r.situacao === "quebrada").length;
   destino.replaceChildren(
     el("p", { style: "margin-top:16px" },
       quebradas
-        ? `${quebradas} receita(s) precisam de ajuste. Baixe o relatório e envie para quem cuida do sistema.`
-        : "Todas as receitas conferidas estão de pé."),
+        ? `${quebradas} fonte(s) precisam de ajuste. Baixe o relatório e envie para quem cuida do sistema.`
+        : "Todas as fontes conferidas estão de pé."),
     el("a", {
       class: "botao secundario", href: "/api/diagnostico/relatorio",
       style: "text-decoration:none; display:inline-block; margin-bottom:8px",

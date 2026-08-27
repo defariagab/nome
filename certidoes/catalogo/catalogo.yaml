@@ -2,8 +2,8 @@
 #
 # `validade_dias` é apenas o padrão do órgão: quando o próprio documento
 # informa a data de validade, o sistema usa a data do documento.
-# `verificado_em` é a data em que os seletores da receita foram conferidos
-# contra o site real — receitas sem essa data ainda não foram validadas.
+# `verificado_em` é a data em que os seletores da fonte foram conferidos
+# contra o site real — fontes sem essa data ainda não foram validadas.
 
 - codigo: rfb_pgfn_conjunta
   nome: Certidão Negativa de Débitos Relativos a Créditos Tributários Federais e à Dívida Ativa da União
@@ -14,7 +14,7 @@
   requer_gov_br: false
   captcha: hcaptcha
   modo: assistido
-  receita: rfb_pgfn_conjunta
+  fonte: rfb_pgfn_conjunta
   url: https://servicos.receitafederal.gov.br/servico/certidoes/#/home
   observacoes: >-
     Emitida em conjunto por RFB e PGFN, para PF e PJ. O portal exige login gov.br,
@@ -31,7 +31,7 @@
   requer_gov_br: false
   captcha: imagem
   modo: assistido
-  receita: cndt
+  fonte: cndt
   url: https://cndt-certidao.tst.jus.br/inicio.faces
   verificado_em: 2026-08-27
   observacoes: >-
@@ -47,7 +47,7 @@
   requer_gov_br: false
   captcha: nenhum
   modo: assistido
-  receita: fgts_crf
+  fonte: fgts_crf
   url: https://consulta-crf.caixa.gov.br/consultacrf/pages/consultaEmpregador.jsf
   verificado_em: 2026-08-27
   observacoes: >-
@@ -62,7 +62,7 @@
   validade_dias: 30
   captcha: recaptcha
   modo: assistido
-  receita: jf_certidao_unificada
+  fonte: jf_certidao_unificada
   url: https://certidao-unificada.cjf.jus.br/#/solicitacao-certidao
   observacoes: >-
     Uma única certidão para as Regiões da Justiça Federal, EXCETO o TRF6, que
@@ -101,7 +101,7 @@
   captcha: desconhecido
   modo: manual
   url: ""
-  observacoes: Configure a URL e a receita conforme a UF do titular.
+  observacoes: Configure a URL e a fonte conforme a UF do titular.
 
 - codigo: municipal_tributos
   nome: Certidão Negativa de Tributos Municipais

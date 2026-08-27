@@ -1,7 +1,7 @@
 """Fila de execução das solicitações.
 
 Um único laço assíncrono cuida de tudo: pega as solicitações prontas,
-executa a receita e vai anotando o andamento no banco, para que a tela
+executa a fonte e vai anotando o andamento no banco, para que a tela
 possa mostrar o que está acontecendo.
 """
 
@@ -15,8 +15,8 @@ from sqlalchemy import select
 from . import servicos
 from .automacao import desafios
 from .automacao.motor import executar
-from .automacao.receitas import carregar_receita
-from .automacao.tipos import Contexto, ErroAutomacao, Passo, Receita
+from .automacao.fontes import carregar_fonte
+from .automacao.tipos import Contexto, ErroAutomacao, Passo, Fonte
 from .banco import sessao
 from .config import config
 from .modelos import EstadoSolicitacao, Solicitacao, TipoCertidao, Titular, agora
@@ -26,10 +26,10 @@ log = logging.getLogger("certidoes.fila")
 INTERVALO = 2.0
 
 
-def _receita_para(tipo: TipoCertidao) -> Receita:
-    """Usa a receita do tipo; sem receita, conduz o usuário até o site."""
-    if tipo.receita and (receita := carregar_receita(tipo.receita)):
-        return receita
+def _fonte_para(tipo: TipoCertidao) -> Fonte:
+    """Usa a fonte do tipo; sem fonte, conduz o usuário até o site."""
+    if tipo.fonte and (fonte := carregar_fonte(tipo.fonte)):
+        return fonte
     passos = []
     if tipo.url:
         passos.append(Passo("abrir", {"url": tipo.url}))
@@ -39,7 +39,7 @@ def _receita_para(tipo: TipoCertidao) -> Receita:
             "Depois anexe o arquivo aqui para o sistema arquivar e controlar o vencimento."
         ),
     }))
-    return Receita(
+    return Fonte(
         codigo=tipo.codigo, nome=tipo.nome, url=tipo.url or "",
         passos=passos, resultado="anexo_manual",
     )
@@ -153,8 +153,8 @@ class Fila:
                     break
                 if solicitacao.id in self._tarefas:
                     continue
-                receita = _receita_para(s.get(TipoCertidao, solicitacao.tipo_certidao_id))
-                if receita.paralelizavel:
+                fonte = _fonte_para(s.get(TipoCertidao, solicitacao.tipo_certidao_id))
+                if fonte.paralelizavel:
                     escolhidas.append(solicitacao.id)
                     continue
                 # Exclusiva: começa sozinha, e só com a fila vazia.
@@ -179,7 +179,9 @@ class Fila:
             solicitacao.estado = EstadoSolicitacao.EXECUTANDO
             solicitacao.iniciada_em = agora()
             solicitacao.tentativas += 1
-            variaveis = servicos.variaveis_do_contexto(titular, tipo)
+            variaveis = servicos.variaveis_do_contexto(
+                titular, tipo, servicos.preferencia(s, "email_escritorio")
+            )
             nome_tipo, tipo_id = tipo.nome, tipo.id
 
         _anotar(solicitacao_id, "inicio", f"Iniciando {nome_tipo}.")
@@ -195,7 +197,7 @@ class Fila:
             return resposta
 
         with sessao() as s:
-            receita = _receita_para(s.get(TipoCertidao, tipo_id))
+            fonte = _fonte_para(s.get(TipoCertidao, tipo_id))
 
         contexto = Contexto(
             solicitacao_id=solicitacao_id,
@@ -204,12 +206,12 @@ class Fila:
             registrar=lambda t, m: _anotar(solicitacao_id, t, m),
             # O perfil guarda cookies e login: quem entra no gov.br uma vez
             # segue emitindo sem repetir a autenticação.
-            pasta_sessao=str(config.pasta_sessoes / receita.perfil) if receita.perfil else None,
+            pasta_sessao=str(config.pasta_sessoes / fonte.perfil) if fonte.perfil else None,
             visivel=config.navegador_visivel,
         )
 
         try:
-            resultado = await executar(receita, contexto, motor=self.motor)
+            resultado = await executar(fonte, contexto, motor=self.motor)
         except desafios.DesafioExpirado as erro:
             _anotar(solicitacao_id, "cancelado", str(erro))
             _mudar_estado(solicitacao_id, EstadoSolicitacao.FALHOU, str(erro))

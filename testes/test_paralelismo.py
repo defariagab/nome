@@ -7,35 +7,35 @@ Emissões com captcha de letras rodam em paralelo de propósito: é o que faz
 from sqlalchemy import select
 
 from certidoes import servicos
-from certidoes.automacao.receitas import carregar_receita
-from certidoes.automacao.tipos import Passo, Receita
+from certidoes.automacao.fontes import carregar_fonte
+from certidoes.automacao.tipos import Passo, Fonte
 from certidoes.banco import sessao
 from certidoes.fila import Fila
 from certidoes.modelos import TipoCertidao
 
 
-def receita(*acoes, **extras):
-    return Receita(
+def fonte(*acoes, **extras):
+    return Fonte(
         codigo="t", nome="t", url="", passos=[Passo(a, {}) for a in acoes], **extras
     )
 
 
 def test_captcha_de_letras_roda_em_paralelo():
-    assert receita("abrir", "captcha_imagem", "clicar").paralelizavel
-    assert carregar_receita("cndt").paralelizavel
-    assert carregar_receita("fgts_crf").paralelizavel
+    assert fonte("abrir", "captcha_imagem", "clicar").paralelizavel
+    assert carregar_fonte("cndt").paralelizavel
+    assert carregar_fonte("fgts_crf").paralelizavel
 
 
 def test_o_que_exige_a_janela_roda_sozinho():
-    assert not receita("abrir", "captcha_interativo").paralelizavel
-    assert not receita("abrir", "login_gov_br").paralelizavel
-    assert not receita("abrir", "acao_manual").paralelizavel
-    assert not carregar_receita("rfb_pgfn_conjunta").paralelizavel
+    assert not fonte("abrir", "captcha_interativo").paralelizavel
+    assert not fonte("abrir", "login_gov_br").paralelizavel
+    assert not fonte("abrir", "acao_manual").paralelizavel
+    assert not carregar_fonte("rfb_pgfn_conjunta").paralelizavel
 
 
 def test_sessao_reaproveitada_impede_paralelismo():
     """Um perfil de navegador não pode ser aberto por duas janelas ao mesmo tempo."""
-    assert not receita("abrir", "preencher", perfil="govbr").paralelizavel
+    assert not fonte("abrir", "preencher", perfil="govbr").paralelizavel
 
 
 def _enfileirar(codigo: str, quantos: int) -> None:
@@ -122,7 +122,7 @@ def test_falta_de_navegador_vira_instrucao_e_nao_culpa_do_site():
 
 
 def test_passo_opcional_nao_derruba_a_emissao():
-    """Banner de cookies que às vezes aparece não pode quebrar a receita."""
+    """Banner de cookies que às vezes aparece não pode quebrar a fonte."""
     from certidoes.automacao.tipos import Passo
 
     assert Passo("clicar", {"seletor": "#cookies", "opcional": True}).opcional

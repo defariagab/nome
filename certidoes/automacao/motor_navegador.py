@@ -1,4 +1,4 @@
-"""Execução das receitas em um navegador real (Playwright/Chromium).
+"""Execução das fontes em um navegador real (Playwright/Chromium).
 
 Sites de órgãos públicos são, na prática, aplicações JSF cheias de AJAX,
 sessão e captcha. Conduzir um navegador de verdade é mais confiável do que
@@ -15,7 +15,7 @@ from datetime import date
 from ..config import config
 from ..modelos import SituacaoCertidao, TipoDesafio
 from .extracao import analisar
-from .tipos import Contexto, ErroAutomacao, Receita, Resultado
+from .tipos import Contexto, ErroAutomacao, Fonte, Resultado
 
 #: trechos que a mensagem do Playwright traz quando o Chromium não foi baixado
 SINAIS_SEM_NAVEGADOR = ("executable doesn't exist", "playwright install", "please run the following")
@@ -138,7 +138,7 @@ async def _texto_da_pagina(pagina) -> str:
 
 
 async def _conferir_erros(pagina, passo, ctx: Contexto) -> None:
-    """Aplica as regras `falhar_se_texto` da receita ao conteúdo atual."""
+    """Aplica as regras `falhar_se_texto` da fonte ao conteúdo atual."""
     regras = passo.get("falhar_se_texto") or []
     if not regras:
         return
@@ -150,13 +150,13 @@ async def _conferir_erros(pagina, passo, ctx: Contexto) -> None:
             raise ErroAutomacao(regra.get("mensagem", alvo), repetir=bool(regra.get("repetir")))
 
 
-async def _executar_passos(receita: Receita, ctx: Contexto, navegador: Navegador) -> Resultado:
+async def _executar_passos(fonte: Fonte, ctx: Contexto, navegador: Navegador) -> Resultado:
     pagina = await navegador.nova_pagina()
     documento: bytes | None = None
     texto_pagina = ""
-    aguarda_anexo = receita.resultado == "anexo_manual"
+    aguarda_anexo = fonte.resultado == "anexo_manual"
 
-    for passo in receita.passos:
+    for passo in fonte.passos:
         acao = passo.acao
         if not passo.se_aplica(ctx.variaveis):
             ctx.registrar("passo", f"{acao} (não se aplica a este titular)")
@@ -164,7 +164,7 @@ async def _executar_passos(receita: Receita, ctx: Contexto, navegador: Navegador
         ctx.registrar("passo", acao)
 
         if acao == "abrir":
-            endereco = ctx.aplicar(passo.get("url")) or receita.url
+            endereco = ctx.aplicar(passo.get("url")) or fonte.url
             try:
                 await pagina.goto(endereco, wait_until="domcontentloaded")
             except Exception as erro:
@@ -281,7 +281,7 @@ async def _executar_passos(receita: Receita, ctx: Contexto, navegador: Navegador
             documento = await pagina.pdf(format="A4", print_background=True)
 
         else:
-            raise ErroAutomacao(f"Passo desconhecido na receita: {acao}")
+            raise ErroAutomacao(f"Passo desconhecido na fonte: {acao}")
 
     if not texto_pagina:
         texto_pagina = await _texto_da_pagina(pagina)
@@ -307,18 +307,18 @@ async def _executar_passos(receita: Receita, ctx: Contexto, navegador: Navegador
     )
 
 
-async def executar(receita: Receita, ctx: Contexto) -> Resultado:
-    """Uma tentativa completa da receita, em um navegador limpo."""
+async def executar(fonte: Fonte, ctx: Contexto) -> Resultado:
+    """Uma tentativa completa da fonte, em um navegador limpo."""
     async with Navegador(visivel=ctx.visivel, pasta_sessao=ctx.pasta_sessao) as navegador:
         try:
-            return await _executar_passos(receita, ctx, navegador)
+            return await _executar_passos(fonte, ctx, navegador)
         except ErroAutomacao:
             raise
         except Exception as erro:
             # Site mudou, campo sumiu, página demorou: em vez de falhar seco, a
-            # receita pode entregar o trabalho já adiantado para a pessoa
+            # fonte pode entregar o trabalho já adiantado para a pessoa
             # concluir na janela que ficou aberta na página certa.
-            if receita.ao_falhar != "pedir_anexo":
+            if fonte.ao_falhar != "pedir_anexo":
                 raise
             ctx.registrar("degradou", f"A automação parou em um passo: {type(erro).__name__}")
             await ctx.perguntar(

@@ -103,7 +103,7 @@ def test_arquivo_fica_legivel_no_acervo():
 
 
 def test_sem_automacao_o_sistema_pede_o_anexo():
-    # tipo sem receita: o sistema abre o site do órgão e pede o PDF
+    # tipo sem fonte: o sistema abre o site do órgão e pede o PDF
     solicitacao_id = _preparar("tj_falencia_concordata")
     asyncio.run(_executar(solicitacao_id))
 

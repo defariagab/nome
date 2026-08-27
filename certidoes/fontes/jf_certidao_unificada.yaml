@@ -6,8 +6,10 @@ ao_falhar: pedir_anexo
 # Seletores obtidos da conferência feita na máquina do escritório em 27/08/2026.
 # O site separa CPF e CNPJ em campos distintos, daí os passos com `quando`.
 # A certidão abrange as Regiões da Justiça Federal, EXCETO o TRF6.
-# Ainda a confirmar numa execução completa: se o documento vem por download ou
-# por e-mail. Enquanto isso, `ao_falhar: pedir_anexo` garante a saída manual.
+# Confirmado pelo escritório em 27/08/2026: o CJF emite na hora (o arquivo vem
+# pelo navegador) e ainda manda uma cópia por e-mail. Por isso `aguardar_download`
+# — e o e-mail preenchido é o do escritório, não o do cliente, para que a cópia
+# chegue a quem acompanha o vencimento.
 passos:
   - acao: abrir
     url: "{url}"
@@ -23,11 +25,11 @@ passos:
     quando: "!cnpj"
   - acao: preencher
     seletor: '[id="email"]'
-    valor: "{email}"
+    valor: "{email_notificacao}"
     opcional: true
   - acao: preencher
     seletor: '[id="emailConfirmacao"]'
-    valor: "{email}"
+    valor: "{email_notificacao}"
     opcional: true
   - acao: captcha_interativo
     seletor: 'iframe[title*="reCAPTCHA"], iframe[name^="a-"]'

@@ -147,7 +147,7 @@ def test_modelo_de_nome_invalido_explica_o_motivo(cliente):
 
 
 def test_inspecao_exige_endereco_completo(cliente):
-    resposta = cliente.post("/api/inspecionar", json={"url": "receita.fazenda.gov.br"})
+    resposta = cliente.post("/api/inspecionar", json={"url": "fonte.fazenda.gov.br"})
     assert resposta.status_code == 400
     assert "https://" in resposta.json()["erro"]
 
@@ -188,3 +188,21 @@ def test_dossie_sem_certidao_explica_o_que_fazer(cliente):
 
 def test_relatorio_de_conferencia_so_existe_depois_de_conferir(cliente):
     assert cliente.get("/api/diagnostico/relatorio").status_code == 404
+
+
+def test_email_do_escritorio_recebe_as_copias(cliente):
+    salvo = cliente.put("/api/preferencias", json={
+        "padrao_nome_arquivo": "{sigla}_{documento}_{validade}",
+        "email_escritorio": "contato@escritorio.adv.br",
+    }).json()
+    assert salvo["email_escritorio"] == "contato@escritorio.adv.br"
+    assert cliente.get("/api/preferencias").json()["email_escritorio"] == "contato@escritorio.adv.br"
+
+
+def test_email_do_escritorio_invalido_e_recusado(cliente):
+    resposta = cliente.put("/api/preferencias", json={
+        "padrao_nome_arquivo": "{sigla}_{documento}_{validade}",
+        "email_escritorio": "isso nao e email",
+    })
+    assert resposta.status_code == 400
+    assert "não parece válido" in resposta.json()["erro"]

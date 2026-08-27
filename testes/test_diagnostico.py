@@ -1,4 +1,4 @@
-"""A conferência das receitas: diz até onde a receita ainda funciona, sem emitir."""
+"""A conferência das fontes: diz até onde a fonte ainda funciona, sem emitir."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import asyncio
 import pytest
 
 from certidoes import diagnostico
-from certidoes.automacao.receitas import listar_receitas
-from certidoes.automacao.tipos import Contexto, Passo, Receita
+from certidoes.automacao.fontes import listar_fontes
+from certidoes.automacao.tipos import Contexto, Passo, Fonte
 from testes.site_falso import SiteFalso
 from testes.test_navegador import _navegador_disponivel
 
@@ -27,18 +27,18 @@ def _contexto(url: str) -> Contexto:
     )
 
 
-def test_toda_acao_usada_nas_receitas_e_conhecida_pela_conferencia():
+def test_toda_acao_usada_nas_fontes_e_conhecida_pela_conferencia():
     """Guarda contra a conferência ficar para trás quando o motor ganha um passo."""
-    for receita in listar_receitas():
-        for passo in receita.passos:
+    for fonte in listar_fontes():
+        for passo in fonte.passos:
             assert passo.acao in diagnostico.ACOES_CONHECIDAS, (
-                f"{receita.codigo}: a conferência não sabe tratar o passo '{passo.acao}'"
+                f"{fonte.codigo}: a conferência não sabe tratar o passo '{passo.acao}'"
             )
 
 
 @pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
-def test_receita_boa_e_conferida_ate_o_captcha_sem_emitir():
-    receita = Receita(
+def test_fonte_boa_e_conferida_ate_o_captcha_sem_emitir():
+    fonte = Fonte(
         codigo="teste", nome="Certidão de teste", url="{url}", resultado="download",
         passos=[
             Passo("abrir", {"url": "{url}"}),
@@ -49,7 +49,7 @@ def test_receita_boa_e_conferida_ate_o_captcha_sem_emitir():
         ],
     )
     with SiteFalso() as site:
-        conferencia = asyncio.run(diagnostico.conferir(receita, _contexto(site.url)))
+        conferencia = asyncio.run(diagnostico.conferir(fonte, _contexto(site.url)))
 
     assert conferencia.situacao == "pronta"
     assert [p.acao for p in conferencia.passos] == ["abrir", "preencher", "captcha_imagem"]
@@ -58,9 +58,9 @@ def test_receita_boa_e_conferida_ate_o_captcha_sem_emitir():
 
 
 @pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
-def test_receita_desatualizada_traz_os_campos_reais_da_pagina():
-    """É este relatório que permite consertar a receita sem abrir o site de novo."""
-    receita = Receita(
+def test_fonte_desatualizada_traz_os_campos_reais_da_pagina():
+    """É este relatório que permite consertar a fonte sem abrir o site de novo."""
+    fonte = Fonte(
         codigo="teste", nome="Certidão de teste", url="{url}", resultado="download",
         passos=[
             Passo("abrir", {"url": "{url}"}),
@@ -69,19 +69,19 @@ def test_receita_desatualizada_traz_os_campos_reais_da_pagina():
         ],
     )
     with SiteFalso() as site:
-        conferencia = asyncio.run(diagnostico.conferir(receita, _contexto(site.url)))
+        conferencia = asyncio.run(diagnostico.conferir(fonte, _contexto(site.url)))
 
     assert conferencia.situacao == "quebrada"
     assert conferencia.passos[-1].resultado == diagnostico.NAO_ENCONTRADO
     seletores = {campo["seletor"] for campo in conferencia.campos_da_pagina}
-    assert '[id="doc"]' in seletores          # o campo que a receita deveria usar
+    assert '[id="doc"]' in seletores          # o campo que a fonte deveria usar
     assert conferencia.captura.startswith("data:image/png;base64,")
-    assert "corrigir a receita" in conferencia.mensagem
+    assert "corrigir a fonte" in conferencia.mensagem
 
 
 @pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
 def test_conferencia_para_antes_de_gerar_o_pdf_da_pagina():
-    receita = Receita(
+    fonte = Fonte(
         codigo="crf", nome="Certificado de teste", url="{url}/crf", resultado="pagina_pdf",
         passos=[
             Passo("abrir", {"url": "{url}/crf"}),
@@ -94,7 +94,7 @@ def test_conferencia_para_antes_de_gerar_o_pdf_da_pagina():
         ],
     )
     with SiteFalso() as site:
-        conferencia = asyncio.run(diagnostico.conferir(receita, _contexto(site.url)))
+        conferencia = asyncio.run(diagnostico.conferir(fonte, _contexto(site.url)))
 
     assert conferencia.situacao == "pronta"
     assert conferencia.passos[-1].acao == "salvar_pagina_pdf"
@@ -103,17 +103,17 @@ def test_conferencia_para_antes_de_gerar_o_pdf_da_pagina():
 
 @pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
 def test_relatorio_em_texto_e_legivel_e_nao_traz_dado_de_cliente():
-    receita = Receita(
+    fonte = Fonte(
         codigo="teste", nome="Certidão de teste", url="{url}", resultado="download",
         passos=[Passo("abrir", {"url": "{url}"}), Passo("preencher", {"seletor": "#doc", "valor": "{documento}"})],
     )
     with SiteFalso() as site:
-        conferencia = asyncio.run(diagnostico.conferir(receita, _contexto(site.url)))
+        conferencia = asyncio.run(diagnostico.conferir(fonte, _contexto(site.url)))
 
     from dataclasses import asdict
 
     relatorio = {"gerado_em": "2026-08-27T12:00:00", "versao": "0.1.0",
-                 "receitas": [asdict(conferencia)]}
+                 "fontes": [asdict(conferencia)]}
     texto = diagnostico.em_texto(relatorio)
     assert "Certidão de teste" in texto
     assert "✓ abrir" in texto
@@ -140,7 +140,7 @@ def test_passo_que_nao_se_aplica_ao_titular_e_pulado():
 @pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
 def test_relatorio_avisa_quando_o_seletor_e_largo_demais():
     """Um seletor que casa com vários elementos pode preencher o campo errado."""
-    receita = Receita(
+    fonte = Fonte(
         codigo="teste", nome="Certidão de teste", url="{url}", resultado="download",
         passos=[
             Passo("abrir", {"url": "{url}"}),
@@ -149,7 +149,7 @@ def test_relatorio_avisa_quando_o_seletor_e_largo_demais():
         ],
     )
     with SiteFalso() as site:
-        conferencia = asyncio.run(diagnostico.conferir(receita, _contexto(site.url)))
+        conferencia = asyncio.run(diagnostico.conferir(fonte, _contexto(site.url)))
 
     preencher = next(p for p in conferencia.passos if p.acao == "preencher")
     assert "casa com" in preencher.detalhe  # a página de teste tem dois campos de texto

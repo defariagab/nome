@@ -116,3 +116,16 @@ def test_certidao_positiva_nao_entra_em_renovacao_automatica(s, titular_exemplo)
     linhas = servicos.painel(s)
     assert linhas[0]["status"] == Status.IRREGULAR.value
     assert agenda.varrer() == []
+
+
+def test_copia_por_email_vai_para_o_escritorio(s, titular_exemplo):
+    """Quem acompanha o vencimento é quem precisa receber a cópia do órgão."""
+    titular_exemplo.email = "cliente@empresa.com.br"
+    cjf = tipo_por_codigo(s, "jf_certidao_unificada")
+
+    variaveis = servicos.variaveis_do_contexto(titular_exemplo, cjf, "escritorio@adv.br")
+    assert variaveis["email_notificacao"] == "escritorio@adv.br"
+    assert variaveis["email"] == "cliente@empresa.com.br"  # o do titular segue disponível
+
+    sem_preferencia = servicos.variaveis_do_contexto(titular_exemplo, cjf)
+    assert sem_preferencia["email_notificacao"] == "cliente@empresa.com.br"
