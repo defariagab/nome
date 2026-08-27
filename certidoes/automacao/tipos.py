@@ -17,6 +17,25 @@ class Passo:
     def get(self, chave: str, padrao: Any = None) -> Any:
         return self.dados.get(chave, padrao)
 
+    @property
+    def opcional(self) -> bool:
+        """Passo que pode não existir na página (banner de cookies, aviso...)."""
+        return bool(self.dados.get("opcional"))
+
+    def se_aplica(self, variaveis: dict[str, str]) -> bool:
+        """Avalia `quando:`, que liga o passo a uma variável do titular.
+
+        `quando: cnpj` roda só para pessoa jurídica; `quando: "!cnpj"` só para
+        pessoa física. É o suficiente para os sites que separam os dois campos.
+        """
+        condicao = str(self.dados.get("quando", "")).strip()
+        if not condicao:
+            return True
+        negada = condicao.startswith("!")
+        nome = condicao.lstrip("!").strip()
+        preenchida = bool((variaveis.get(nome) or "").strip())
+        return not preenchida if negada else preenchida
+
 
 @dataclass(frozen=True)
 class Receita:

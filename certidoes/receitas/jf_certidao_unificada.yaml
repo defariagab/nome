@@ -3,25 +3,38 @@ nome: Certidão Unificada da Justiça Federal — CJF
 url: https://certidao-unificada.cjf.jus.br/#/solicitacao-certidao
 resultado: download
 ao_falhar: pedir_anexo
-# Sem `verificado_em`: o site recusa conexões que não venham de uma rede comum
-# (bloqueio de IP), então os seletores não puderam ser conferidos no ambiente de
-# desenvolvimento — mas serão conferidos na máquina do escritório, que acessa
-# normalmente. Use `python -m certidoes inspecionar <url>` para completá-los.
-# A certidão abrange as Regiões da Justiça Federal, exceto o TRF6, que segue
-# fora do sistema unificado por tempo indeterminado.
+# Seletores obtidos da conferência feita na máquina do escritório em 27/08/2026.
+# O site separa CPF e CNPJ em campos distintos, daí os passos com `quando`.
+# A certidão abrange as Regiões da Justiça Federal, EXCETO o TRF6.
+# Ainda a confirmar numa execução completa: se o documento vem por download ou
+# por e-mail. Enquanto isso, `ao_falhar: pedir_anexo` garante a saída manual.
 passos:
   - acao: abrir
     url: "{url}"
   - acao: esperar
-    ms: 2500
+    ms: 3000
   - acao: preencher
-    seletor: "input[formcontrolname='cpfCnpj'], input[name='cpfCnpj'], input[type='text']"
+    seletor: '[id="cnpj"]'
     valor: "{documento_formatado}"
+    quando: cnpj
+  - acao: preencher
+    seletor: '[id="cpf"]'
+    valor: "{documento_formatado}"
+    quando: "!cnpj"
+  - acao: preencher
+    seletor: '[id="email"]'
+    valor: "{email}"
+    opcional: true
+  - acao: preencher
+    seletor: '[id="emailConfirmacao"]'
+    valor: "{email}"
+    opcional: true
   - acao: captcha_interativo
+    seletor: 'iframe[title*="reCAPTCHA"], iframe[name^="a-"]'
     instrucao: >-
-      Confirme o captcha na janela do navegador aberta na página do CJF e
-      volte aqui. Lembre-se: a certidão unificada não cobre o TRF6.
+      Confirme o reCAPTCHA na janela do navegador aberta na página do CJF e volte
+      aqui. Lembre-se: a certidão unificada não cobre o TRF6.
   - acao: clicar
-    seletor: "button[type='submit']"
+    seletor: 'button:has-text("Solicitar certidão")'
   - acao: aguardar_download
     timeout: 120

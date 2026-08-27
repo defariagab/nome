@@ -121,6 +121,15 @@ class Navegador:
         return await asyncio.wait_for(self._downloads.get(), timeout=timeout)
 
 
+async def _presente(pagina, seletor: str, ms: int = 3000) -> bool:
+    """O elemento está na página agora? Usado pelos passos marcados `opcional`."""
+    try:
+        await pagina.wait_for_selector(seletor, timeout=ms)
+        return True
+    except Exception:
+        return False
+
+
 async def _texto_da_pagina(pagina) -> str:
     try:
         return await pagina.inner_text("body")
@@ -149,6 +158,9 @@ async def _executar_passos(receita: Receita, ctx: Contexto, navegador: Navegador
 
     for passo in receita.passos:
         acao = passo.acao
+        if not passo.se_aplica(ctx.variaveis):
+            ctx.registrar("passo", f"{acao} (não se aplica a este titular)")
+            continue
         ctx.registrar("passo", acao)
 
         if acao == "abrir":
@@ -160,16 +172,19 @@ async def _executar_passos(receita: Receita, ctx: Contexto, navegador: Navegador
                     raise amigavel from erro
                 raise
 
-        elif acao == "clicar":
-            await pagina.click(ctx.aplicar(passo.get("seletor")))
-
-        elif acao == "preencher":
-            await pagina.fill(ctx.aplicar(passo.get("seletor")), ctx.aplicar(passo.get("valor")))
-
-        elif acao == "selecionar":
-            await pagina.select_option(
-                ctx.aplicar(passo.get("seletor")), ctx.aplicar(passo.get("valor"))
-            )
+        elif acao in {"clicar", "preencher", "selecionar"}:
+            seletor = ctx.aplicar(passo.get("seletor"))
+            # Banner de cookies, aviso de manutenção, campo que só aparece às
+            # vezes: marcados `opcional`, não derrubam a emissão quando faltam.
+            if passo.opcional and not await _presente(pagina, seletor, 3000):
+                ctx.registrar("passo", f"{acao} {seletor} (não apareceu; seguindo)")
+                continue
+            if acao == "clicar":
+                await pagina.click(seletor)
+            elif acao == "preencher":
+                await pagina.fill(seletor, ctx.aplicar(passo.get("valor")))
+            else:
+                await pagina.select_option(seletor, ctx.aplicar(passo.get("valor")))
 
         elif acao == "esperar":
             if seletor := ctx.aplicar(passo.get("seletor")):

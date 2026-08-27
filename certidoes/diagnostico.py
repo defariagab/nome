@@ -92,6 +92,30 @@ async def _existe(pagina, seletor: str, espera: int = 8000) -> bool:
         return False
 
 
+async def _quem_casou(pagina, seletor: str) -> str:
+    """Descreve o elemento que o seletor encontrou.
+
+    Um seletor largo demais pode casar com o campo errado — foi o que
+    aconteceu com a busca do portal da Receita — e sem isso o relatório diz
+    'ok' para um passo que preencheu a caixa errada.
+    """
+    try:
+        elementos = await pagina.query_selector_all(seletor)
+        if not elementos:
+            return ""
+        descricao = await elementos[0].evaluate(
+            "el => [el.tagName.toLowerCase(), el.id && '#'+el.id,"
+            " el.getAttribute('name') && 'name='+el.getAttribute('name'),"
+            " el.getAttribute('aria-label') || el.getAttribute('placeholder') || '']"
+            ".filter(Boolean).join(' ')"
+        )
+        if len(elementos) > 1:
+            return f"{descricao} (atenção: o seletor casa com {len(elementos)} elementos)"
+        return descricao
+    except Exception:
+        return ""
+
+
 async def conferir(receita: Receita, ctx: Contexto, visivel: bool = False) -> Conferencia:
     """Percorre a receita no site real, sem emitir. Devolve o que encontrou."""
     resultado = Conferencia(
@@ -108,6 +132,11 @@ async def conferir(receita: Receita, ctx: Contexto, visivel: bool = False) -> Co
             acao = passo.acao
             seguinte = receita.passos[indice + 1].acao if indice + 1 < len(receita.passos) else ""
             seletor = ctx.aplicar(passo.get("seletor"))
+
+            if not passo.se_aplica(ctx.variaveis):
+                resultado.registrar(PassoConferido(
+                    acao, seletor, PULADO, "Não se aplica a este tipo de titular."))
+                continue
 
             if acao not in ACOES_CONHECIDAS:
                 resultado.registrar(PassoConferido(acao, resultado=ERRO, detalhe="Passo desconhecido."))
@@ -157,11 +186,12 @@ async def conferir(receita: Receita, ctx: Contexto, visivel: bool = False) -> Co
                         resultado.registrar(PassoConferido(
                             acao, seletor, NAO_ENCONTRADO, "Campo não encontrado na página."))
                         break
+                    casou = await _quem_casou(pagina, seletor)
                     if acao == "preencher":
                         await pagina.fill(seletor, ctx.aplicar(passo.get("valor")))
                     else:
                         await pagina.select_option(seletor, ctx.aplicar(passo.get("valor")))
-                    resultado.registrar(PassoConferido(acao, seletor))
+                    resultado.registrar(PassoConferido(acao, seletor, detalhe=f"casou com: {casou}"))
 
                 elif acao == "clicar":
                     if seguinte in ACOES_DOCUMENTO:
@@ -225,8 +255,13 @@ def _variaveis_de_teste() -> dict[str, str]:
     }
 
 
-async def conferir_todas(codigos: list[str] | None = None, visivel: bool = False) -> dict:
+async def conferir_todas(codigos: list[str] | None = None, visivel: bool | None = None) -> dict:
     """Confere as receitas pedidas (ou todas) e monta o relatório."""
+    # A conferência precisa reproduzir as condições da emissão real. Rodar
+    # escondido dava resultado enganoso: alguns sites entregam outra página
+    # para um navegador oculto — foi o que aconteceu com o FGTS.
+    if visivel is None:
+        visivel = config.navegador_visivel
     conferencias = []
     for receita in listar_receitas():
         if codigos and receita.codigo not in codigos:

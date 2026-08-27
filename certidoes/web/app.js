@@ -781,7 +781,7 @@ async function desenharConfiguracoes() {
   });
 
   /* --- conferência das receitas contra os sites reais --- */
-  const verNavegador = el("input", { type: "checkbox" });
+  const verNavegador = el("input", { type: "checkbox", checked: "checked" });
   const resultadoConferencia = el("div", {});
   const conferir = el("button", { class: "botao primario" }, "Conferir agora");
   conferir.addEventListener("click", async () => {
@@ -810,7 +810,8 @@ async function desenharConfiguracoes() {
           "para antes do botão de emissão e antes de qualquer captcha. Rode depois de instalar e " +
           "sempre que uma emissão começar a falhar."),
         el("label", { class: "alternador", style: "margin:10px 0" },
-          [verNavegador, "mostrar a janela do navegador enquanto confere"]),
+          [verNavegador, "mostrar a janela do navegador (recomendado: alguns sites " +
+           "entregam outra página para um navegador escondido)"]),
         conferir,
         resultadoConferencia,
       ]),

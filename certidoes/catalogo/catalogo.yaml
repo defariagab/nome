@@ -17,9 +17,10 @@
   receita: rfb_pgfn_conjunta
   url: https://servicos.receitafederal.gov.br/servico/certidoes/#/home
   observacoes: >-
-    Emitida em conjunto por RFB e PGFN, para PF e PJ. O portal é protegido por
-    hCaptcha: o widget é resolvido pela pessoa na janela do navegador e o resto
-    da emissão é automático. Seletores ainda não conferidos.
+    Emitida em conjunto por RFB e PGFN, para PF e PJ. O portal exige login gov.br,
+    que o sistema guarda num perfil de navegador: entra uma vez e as emissões
+    seguintes reaproveitam a sessão. O caminho do formulário, depois do login,
+    ainda precisa ser mapeado (Configurações › Mapear um site novo).
 
 - codigo: cndt
   nome: Certidão Negativa de Débitos Trabalhistas
@@ -59,15 +60,15 @@
   orgao: Conselho da Justiça Federal
   esfera: federal
   validade_dias: 30
-  captcha: desconhecido
+  captcha: recaptcha
   modo: assistido
   receita: jf_certidao_unificada
   url: https://certidao-unificada.cjf.jus.br/#/solicitacao-certidao
   observacoes: >-
     Uma única certidão para as Regiões da Justiça Federal, EXCETO o TRF6, que
     permanece fora do sistema unificado por tempo indeterminado — para a 6ª
-    Região, emita à parte no site do próprio tribunal. Seletores ainda não
-    conferidos.
+    Região, emita à parte no site do próprio tribunal. Campos conferidos em
+    27/08/2026; o site usa reCAPTCHA, resolvido por você na janela.
 
 - codigo: tj_distribuicao_civel
   nome: Certidão de Distribuição Cível da Justiça Estadual

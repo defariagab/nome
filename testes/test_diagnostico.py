@@ -122,3 +122,34 @@ def test_relatorio_em_texto_e_legivel_e_nao_traz_dado_de_cliente():
     caminho = diagnostico.salvar_relatorio(relatorio)
     assert caminho.exists()
     assert caminho.with_suffix(".md").exists()
+
+
+def test_passo_que_nao_se_aplica_ao_titular_e_pulado():
+    """CPF e CNPJ em campos separados: só o do titular deve ser exercitado."""
+    from certidoes.automacao.tipos import Passo
+
+    pj = {"cnpj": "11222333000181", "cpf": ""}
+    assert Passo("preencher", {"quando": "cnpj"}).se_aplica(pj)
+    assert not Passo("preencher", {"quando": "!cnpj"}).se_aplica(pj)
+
+    pf = {"cnpj": "", "cpf": "52998224725"}
+    assert not Passo("preencher", {"quando": "cnpj"}).se_aplica(pf)
+    assert Passo("preencher", {"quando": "!cnpj"}).se_aplica(pf)
+
+
+@pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
+def test_relatorio_avisa_quando_o_seletor_e_largo_demais():
+    """Um seletor que casa com vários elementos pode preencher o campo errado."""
+    receita = Receita(
+        codigo="teste", nome="Certidão de teste", url="{url}", resultado="download",
+        passos=[
+            Passo("abrir", {"url": "{url}"}),
+            Passo("preencher", {"seletor": "input[type='text']", "valor": "{documento}"}),
+            Passo("aguardar_download", {"timeout": 5}),
+        ],
+    )
+    with SiteFalso() as site:
+        conferencia = asyncio.run(diagnostico.conferir(receita, _contexto(site.url)))
+
+    preencher = next(p for p in conferencia.passos if p.acao == "preencher")
+    assert "casa com" in preencher.detalhe  # a página de teste tem dois campos de texto

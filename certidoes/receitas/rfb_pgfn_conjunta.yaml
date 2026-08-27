@@ -1,27 +1,32 @@
 codigo: rfb_pgfn_conjunta
 nome: CND Federal — Receita Federal / PGFN
 url: https://servicos.receitafederal.gov.br/servico/certidoes/#/home
-resultado: download
+resultado: anexo_manual
 ao_falhar: pedir_anexo
-# Sem `verificado_em`: os seletores abaixo ainda NÃO foram conferidos contra a
-# página. O portal é um aplicativo Angular protegido por hCaptcha — a API
-# recusa a emissão sem o token do widget ("CaptchaTokenNaoInformado"), por isso
-# o passo `captcha_interativo`: quem resolve é a pessoa, na janela do navegador.
-# Para completar os seletores, rode:  python -m certidoes inspecionar <url>
+# O login gov.br fica guardado neste perfil: entra uma vez e as emissões
+# seguintes reaproveitam a sessão.
+perfil: govbr
+# A conferência de 27/08/2026 mostrou que `#/home` é a página de entrada do
+# portal: ela não tem campo de CPF/CNPJ — tem busca, banner de cookies, botão
+# "Entrar com" (gov.br) e um hCaptcha. O caminho até o formulário da certidão
+# está atrás do login e ainda não foi mapeado.
+#
+# Para completar esta receita: Configurações › Mapear um site novo, com este
+# endereço e uma espera de 90 segundos; entre com o gov.br e navegue até a tela
+# de emissão da certidão durante essa espera. A lista de campos que aparecer é
+# o que falta para os passos abaixo do login.
 passos:
   - acao: abrir
     url: "{url}"
-  - acao: esperar
-    ms: 2500
-  - acao: preencher
-    seletor: "input[formcontrolname='ni'], input[name='ni'], input[type='text']"
-    valor: "{documento}"
-  - acao: captcha_interativo
-    seletor: "iframe[src*='hcaptcha'], .h-captcha"
-    instrucao: >-
-      Resolva o hCaptcha na janela do navegador que está aberta na página da
-      Receita e confirme aqui. O resto da emissão o sistema faz sozinho.
   - acao: clicar
-    seletor: "button[type='submit'], button.br-button.primary"
-  - acao: aguardar_download
-    timeout: 120
+    seletor: 'button:has-text("Aceitar")'
+    opcional: true
+  - acao: login_gov_br
+    instrucao: >-
+      Entre com o gov.br na janela do navegador que foi aberta no portal da
+      Receita. O login fica guardado: nas próximas emissões você não precisa
+      repetir.
+  - acao: acao_manual
+    instrucao: >-
+      Conclua a emissão da CND Federal no navegador e salve o PDF. Depois anexe
+      o arquivo aqui para o sistema arquivar e controlar a validade.

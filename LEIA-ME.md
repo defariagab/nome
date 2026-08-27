@@ -93,6 +93,14 @@ Passos disponíveis: `abrir`, `preencher`, `selecionar`, `clicar`, `esperar`,
 `captcha_imagem`, `captcha_interativo`, `login_gov_br`, `acao_manual`,
 `exigir_texto`, `aguardar_download`, `salvar_pagina_pdf`.
 
+Dois modificadores servem para os sites do mundo real:
+
+- **`quando:`** liga o passo a uma variável. `quando: cnpj` roda só para pessoa
+  jurídica, `quando: "!cnpj"` só para física — é o que resolve os sites que
+  separam CPF e CNPJ em campos diferentes, como o do CJF.
+- **`opcional: true`** deixa o passo passar quando o elemento não está lá.
+  Banner de cookies, aviso de manutenção, campo que só aparece às vezes.
+
 ### Captcha em escala: o problema dos 40 captchas
 
 Emitir 40 certidões não pode custar 40 interrupções. Três mecanismos atacam isso:
@@ -139,10 +147,10 @@ como qualquer outro — o controle de validade nunca depende da automação exis
 
 | Certidão | Situação |
 |---|---|
-| **CNDT** (TST) | Receita completa com captcha de imagem, paralelizável. Seletores conferidos contra o site em 27/08/2026. |
-| **CRF/FGTS** (Caixa) | Receita completa (CNPJ ou CPF + UF), sem captcha na consulta. Seletores conferidos em 27/08/2026. |
-| **CND Federal** (RFB/PGFN) | Receita escrita para o portal atual (`servicos.receitafederal.gov.br`), com `captcha_interativo`: a API recusa a emissão sem o token do hCaptcha, então o widget é resolvido por você na janela e o resto é automático. Seletores ainda não conferidos. |
-| **Certidão Unificada da Justiça Federal** (CJF) | Receita escrita para `certidao-unificada.cjf.jus.br`. Cobre as Regiões **exceto o TRF6**, que segue fora do sistema unificado — para a 6ª Região, emita à parte. Seletores ainda não conferidos: o site recusa conexões de fora de uma rede comum. |
+| **CNDT** (TST) | **Conferida no escritório em 27/08/2026**: caminho inteiro reconhecido, do início ao captcha. |
+| **CRF/FGTS** (Caixa) | Seletores corretos (conferidos no HTML da página em 27/08/2026). A primeira conferência falhou por rodar com o navegador escondido, e o site entregou outra página — corrigido: a conferência agora roda visível, como a emissão real. |
+| **CND Federal** (RFB/PGFN) | O portal exige **login gov.br**, guardado no perfil `govbr`: entra uma vez e as emissões seguintes reaproveitam a sessão. O caminho do formulário, depois do login, ainda precisa ser mapeado. |
+| **Certidão Unificada da Justiça Federal** (CJF) | Campos conferidos em 27/08/2026: CPF e CNPJ ficam em campos separados (daí o `quando:`), e o site usa reCAPTCHA. Falta confirmar se o documento vem por download ou por e-mail. Cobre as Regiões **exceto o TRF6**. |
 | **Estaduais e municipais** | Cadastradas como modelo no catálogo, sem receita: use **Configurações › Mapear um site novo** para descobrir os campos do seu tribunal/SEFAZ/prefeitura. |
 
 Honestidade sobre o estado atual: **as receitas da CNDT e do FGTS foram escritas a
@@ -171,7 +179,13 @@ python -m certidoes conferir           # --ver mostra a janela do navegador
 ```
 
 Os dados usados na conferência são fictícios: nenhum documento de cliente entra no
-relatório.
+relatório. Ela roda com a **janela do navegador visível** por padrão, de propósito:
+alguns sites entregam outra página para um navegador escondido, e uma conferência
+que não reproduz as condições reais dá resposta enganosa.
+
+O relatório também informa **com qual elemento cada seletor casou** e avisa quando
+um seletor casa com vários — foi assim que se descobriu que um seletor largo demais
+preenchia a caixa de busca do portal da Receita em vez do campo da certidão.
 
 ### Dossiê de regularidade
 

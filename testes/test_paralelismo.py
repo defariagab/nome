@@ -119,3 +119,11 @@ def test_falta_de_navegador_vira_instrucao_e_nao_culpa_do_site():
 
     # o que não é de infraestrutura continua seguindo o caminho normal
     assert _erro_de_navegador(Exception("Timeout 30000ms exceeded waiting for selector")) is None
+
+
+def test_passo_opcional_nao_derruba_a_emissao():
+    """Banner de cookies que às vezes aparece não pode quebrar a receita."""
+    from certidoes.automacao.tipos import Passo
+
+    assert Passo("clicar", {"seletor": "#cookies", "opcional": True}).opcional
+    assert not Passo("clicar", {"seletor": "#cookies"}).opcional

@@ -427,8 +427,8 @@ def salvar_preferencias(dados: Preferencias):
 
 class PedidoConferencia(BaseModel):
     codigos: list[str] = Field(default_factory=list)
-    #: mostrar a janela do navegador enquanto confere
-    visivel: bool = False
+    #: mostrar a janela do navegador; sem valor, segue a configuração do sistema
+    visivel: bool | None = None
 
 
 @app.post("/api/diagnostico")
