@@ -115,9 +115,16 @@ class Navegador:
             if self._pw:
                 await self._pw.stop()
 
-    async def nova_pagina(self):
-        pagina = self._contexto.pages[0] if self._contexto.pages else await self._contexto.new_page()
+    def _escutar_downloads(self, pagina) -> None:
         pagina.on("download", lambda d: self._downloads.put_nowait(d))
+
+    async def nova_pagina(self):
+        # Vários sites entregam o arquivo numa aba nova. Escutamos todas as
+        # abas do navegador para que o download não se perca em nenhuma delas.
+        self._contexto.on("page", self._escutar_downloads)
+        for pagina_existente in self._contexto.pages:
+            self._escutar_downloads(pagina_existente)
+        pagina = self._contexto.pages[0] if self._contexto.pages else await self._contexto.new_page()
         return pagina
 
     async def proximo_download(self, timeout: int):
@@ -198,7 +205,27 @@ async def _executar_passos(fonte: Fonte, ctx: Contexto, navegador: Navegador) ->
         elif acao == "captcha_imagem":
             seletor = ctx.aplicar(passo.get("seletor"))
             await pagina.wait_for_selector(seletor)
+            # A imagem do captcha costuma ser preenchida por JavaScript depois
+            # que o elemento já existe. Fotografar antes disso entrega uma
+            # figura em branco — e ninguém acerta um captcha que não vê.
+            try:
+                await pagina.wait_for_function(
+                    "seletor => { const i = document.querySelector(seletor);"
+                    " return i && (i.complete !== false) && (i.naturalWidth || i.width) > 10; }",
+                    arg=seletor,
+                    timeout=20_000,
+                )
+            except Exception as erro:
+                raise ErroAutomacao(
+                    "A imagem do captcha não carregou na página do órgão. "
+                    "Vale tentar de novo em instantes."
+                ) from erro
             imagem = await pagina.locator(seletor).screenshot()
+            if len(imagem) < 400:
+                raise ErroAutomacao(
+                    "A imagem do captcha veio em branco. Sem ela não há como responder — "
+                    "vale tentar de novo."
+                )
             resposta = await ctx.perguntar(
                 tipo=TipoDesafio.CAPTCHA_IMAGEM,
                 instrucao=passo.get("instrucao") or "Digite os caracteres da imagem.",

@@ -206,3 +206,50 @@ def test_email_do_escritorio_invalido_e_recusado(cliente):
     })
     assert resposta.status_code == 400
     assert "não parece válido" in resposta.json()["erro"]
+
+
+def test_exclusoes_pela_api(cliente):
+    from certidoes.automacao.pdf_simples import gerar
+
+    tipos = {t["codigo"]: t for t in cliente.get("/api/tipos").json()}
+    titular = criar_titular(cliente, monitoramentos=[tipos["cndt"]["id"]]).json()
+    solicitacao = cliente.post(
+        "/api/solicitacoes", json={"titular_id": titular["id"], "tipo_id": tipos["cndt"]["id"]}
+    ).json()
+    pdf = gerar(["Certidao n. 5/2026", "Validade: 31/12/2030", "CERTIDAO NEGATIVA"], "CNDT")
+    cliente.post(f"/api/solicitacoes/{solicitacao['id']}/anexar",
+                 files={"arquivo": ("c.pdf", pdf, "application/pdf")})
+
+    previa = cliente.get(f"/api/titulares/{titular['id']}/o-que-sera-excluido").json()
+    assert previa["certidoes"] == 1 and previa["solicitacoes"] == 1
+
+    certidao_id = cliente.get("/api/painel").json()[0]["certidao_id"]
+    assert cliente.delete(f"/api/certidoes/{certidao_id}").status_code == 200
+    assert cliente.get("/api/certidoes").json() == []
+
+    assert cliente.delete(f"/api/solicitacoes/{solicitacao['id']}").status_code == 200
+    assert cliente.get("/api/solicitacoes").json() == []
+
+    assert cliente.delete(f"/api/titulares/{titular['id']}?definitivo=true").status_code == 200
+    assert cliente.get("/api/titulares").json() == []
+
+
+def test_diagnostico_das_emissoes_sai_legivel(cliente):
+    tipos = {t["codigo"]: t for t in cliente.get("/api/tipos").json()}
+    titular = criar_titular(cliente, monitoramentos=[tipos["cndt"]["id"]]).json()
+    cliente.post("/api/solicitacoes",
+                 json={"titular_id": titular["id"], "tipo_id": tipos["cndt"]["id"]})
+
+    resposta = cliente.get("/api/diagnostico/emissoes")
+    assert resposta.status_code == 200
+    texto = resposta.content.decode()
+    assert "Diagnóstico das emissões" in texto
+    assert "Certidão Negativa de Débitos Trabalhistas" in texto
+    assert "estado: na_fila" in texto
+
+
+def test_desativar_titular_continua_sendo_o_padrao(cliente):
+    titular = criar_titular(cliente).json()
+    assert cliente.delete(f"/api/titulares/{titular['id']}").status_code == 200
+    assert cliente.get("/api/titulares").json() == []                      # some da lista
+    assert cliente.get("/api/titulares?incluir_inativos=true").json() != []  # mas não foi apagado

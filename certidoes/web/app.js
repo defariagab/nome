@@ -96,6 +96,15 @@ function abrirModal(titulo, corpo, botoes = []) {
 }
 const fecharModal = () => $("#cortina").classList.add("oculto");
 
+/* Excluir é definitivo: a pessoa precisa ver o que perde antes de decidir. */
+function confirmar(titulo, corpo, rotulo = "Excluir") {
+  return new Promise((resolver) => {
+    const cancelar = el("button", { class: "botao secundario", onclick: () => { fecharModal(); resolver(false); } }, "Cancelar");
+    const confirmarBotao = el("button", { class: "botao perigo", onclick: () => { fecharModal(); resolver(true); } }, rotulo);
+    abrirModal(titulo, typeof corpo === "string" ? el("div", {}, corpo) : corpo, [cancelar, confirmarBotao]);
+  });
+}
+
 /* ------------------------------------------------------------------ painel */
 function cartao(valor, rotulo, classe, aoClicar) {
   return el("div", { class: `cartao ${classe}`, ...(aoClicar ? { onclick: aoClicar } : {}) }, [
@@ -390,10 +399,32 @@ function formularioTitular(titular = null) {
     }
   });
 
-  abrirModal(titular ? "Editar titular" : "Novo titular", corpo, [
-    el("button", { class: "botao secundario", onclick: fecharModal }, "Cancelar"),
-    salvar,
-  ]);
+  const botoes = [el("button", { class: "botao secundario", onclick: fecharModal }, "Cancelar"), salvar];
+  if (titular) {
+    const excluir = el("button", { class: "botao perigo", style: "margin-right:auto" }, "Excluir titular");
+    excluir.addEventListener("click", async () => {
+      const previa = await api(`/api/titulares/${titular.id}/o-que-sera-excluido`);
+      fecharModal();
+      const certeza = await confirmar(`Excluir ${previa.titular}?`,
+        el("div", {}, [
+          el("p", {}, "Serão apagados definitivamente:"),
+          el("ul", {}, [
+            el("li", {}, `${previa.certidoes} certidão(ões) arquivada(s), com os PDFs`),
+            el("li", {}, `${previa.solicitacoes} solicitação(ões)`),
+            el("li", {}, "o cadastro e o acompanhamento de vencimentos"),
+          ]),
+          el("p", { class: "apoio" },
+            "Não tem volta. Se a intenção é só parar de acompanhar, desmarque as certidões " +
+            "no cadastro em vez de excluir."),
+        ]), "Excluir definitivamente");
+      if (!certeza) return;
+      await api(`/api/titulares/${titular.id}?definitivo=true`, { method: "DELETE" });
+      avisar(`${previa.titular} foi excluído.`);
+      await carregar();
+    });
+    botoes.unshift(excluir);
+  }
+  abrirModal(titular ? "Editar titular" : "Novo titular", corpo, botoes);
 }
 
 /* ------------------------------------------------------------ solicitações */
@@ -422,6 +453,20 @@ async function desenharSolicitacoes() {
       acoes.push(el("button", { class: "botao secundario miudo", onclick: () => cancelar(item) }, "Cancelar"));
     }
     acoes.push(el("button", { class: "botao secundario miudo", onclick: () => detalhes(item) }, "Detalhes"));
+    if (["concluida", "falhou", "cancelada", "aguardando_anexo"].includes(item.estado)) {
+      acoes.push(el("button", {
+        class: "botao secundario miudo", style: "margin-left:6px",
+        onclick: async () => {
+          const certeza = await confirmar("Excluir esta solicitação?",
+            "Some da lista o registro desta tentativa. A certidão já arquivada, se houver, " +
+            "continua no acervo.");
+          if (!certeza) return;
+          await api(`/api/solicitacoes/${item.id}`, { method: "DELETE" });
+          avisar("Solicitação excluída.");
+          await carregar();
+        },
+      }, "Excluir"));
+    }
 
     return el("tr", {}, [
       el("td", {}, [
@@ -538,9 +583,25 @@ async function desenharAcervo() {
         c.substituida ? el("span", { class: "etiqueta" }, "substituída") : null,
         c.origem === "upload" ? el("span", { class: "etiqueta" }, "anexada") : null,
       ]),
-      el("td", { class: "acoes" }, c.tem_arquivo
-        ? el("a", { class: "botao secundario miudo", href: `/api/certidoes/${c.id}/arquivo`, target: "_blank", style: "text-decoration:none" }, "Abrir PDF")
-        : el("span", { class: "secundaria" }, "sem arquivo")),
+      el("td", { class: "acoes" }, [
+        c.tem_arquivo
+          ? el("a", { class: "botao secundario miudo", href: `/api/certidoes/${c.id}/arquivo`,
+                      target: "_blank", style: "text-decoration:none; margin-right:6px" }, "Abrir PDF")
+          : el("span", { class: "secundaria", style: "margin-right:6px" }, "sem arquivo"),
+        el("button", {
+          class: "botao secundario miudo",
+          onclick: async () => {
+            const certeza = await confirmar("Excluir esta certidão do acervo?",
+              `${c.tipo} de ${c.titular}, válida até ${dataBR(c.valida_ate)}. ` +
+              "O PDF é apagado junto. Se houver uma versão anterior, ela volta a valer.");
+            if (!certeza) return;
+            await api(`/api/certidoes/${c.id}`, { method: "DELETE" });
+            avisar("Certidão excluída.");
+            await carregar();
+            await desenharAcervo();
+          },
+        }, "Excluir"),
+      ]),
     ])
   );
   $("#lista-acervo").replaceChildren(
@@ -1022,6 +1083,15 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#botao-novo-titular").addEventListener("click", () => formularioTitular());
   $("#botao-ajuda").addEventListener("click", ajuda);
   $("#incluir-substituidas").addEventListener("change", desenharAcervo);
+  $("#botao-limpar-solicitacoes").addEventListener("click", async () => {
+    const certeza = await confirmar("Limpar as solicitações encerradas?",
+      "Some da lista tudo o que falhou ou foi cancelado. As certidões arquivadas não são tocadas.",
+      "Limpar");
+    if (!certeza) return;
+    const r = await api("/api/solicitacoes/limpar", { method: "POST" });
+    avisar(r.removidas ? `${r.removidas} solicitação(ões) removidas.` : "Nada a limpar.", "bom");
+    await carregar();
+  });
   $("#botao-emitir-pendentes").addEventListener("click", async (e) => {
     e.target.disabled = true;
     try {

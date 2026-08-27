@@ -360,6 +360,87 @@ def anexar_documento(s: Session, solicitacao_id: int, dados: bytes,
     return certidao
 
 
+# --------------------------------------------------------------------------- #
+# Exclusão
+# --------------------------------------------------------------------------- #
+
+def excluir_certidao(s: Session, certidao_id: int) -> None:
+    """Remove a certidão e o arquivo. A anterior volta a valer, se houver."""
+    certidao = s.get(Certidao, certidao_id)
+    if certidao is None:
+        raise ErroDeUso("Certidão não encontrada.")
+    titular_id, tipo_id = certidao.titular_id, certidao.tipo_certidao_id
+
+    if certidao.arquivo:
+        try:
+            arquivos.caminho_absoluto(certidao.arquivo).unlink(missing_ok=True)
+        except (OSError, ValueError):
+            pass  # o registro sai do sistema mesmo que o arquivo já não esteja lá
+
+    for solicitacao in s.scalars(select(Solicitacao).where(Solicitacao.certidao_id == certidao_id)):
+        solicitacao.certidao_id = None
+    registrar_evento(s, "certidao", certidao_id, "excluida",
+                     f"Certidão de {certidao.emitida_em.strftime('%d/%m/%Y')} excluída.")
+    s.delete(certidao)
+    s.flush()
+
+    # Sem a que foi excluída, a mais recente que sobrou volta a ser a vigente.
+    anterior = s.scalar(
+        select(Certidao)
+        .where(Certidao.titular_id == titular_id, Certidao.tipo_certidao_id == tipo_id)
+        .order_by(Certidao.valida_ate.desc(), Certidao.id.desc())
+        .limit(1)
+    )
+    if anterior is not None:
+        anterior.substituida = False
+
+
+def excluir_solicitacao(s: Session, solicitacao_id: int) -> None:
+    """Remove o registro da solicitação. A certidão arquivada não é tocada."""
+    solicitacao = s.get(Solicitacao, solicitacao_id)
+    if solicitacao is None:
+        raise ErroDeUso("Solicitação não encontrada.")
+    if not solicitacao.estado.encerrada and solicitacao.estado is not EstadoSolicitacao.AGUARDANDO_ANEXO:
+        raise ErroDeUso(
+            "Esta solicitação ainda está em andamento. Cancele antes de excluir."
+        )
+    s.delete(solicitacao)
+
+
+def limpar_solicitacoes(s: Session, incluir_concluidas: bool = False) -> int:
+    """Tira da lista o que já terminou. As certidões ficam no acervo."""
+    estados = [EstadoSolicitacao.FALHOU, EstadoSolicitacao.CANCELADA]
+    if incluir_concluidas:
+        estados.append(EstadoSolicitacao.CONCLUIDA)
+    apagadas = 0
+    for solicitacao in s.scalars(select(Solicitacao).where(Solicitacao.estado.in_(estados))):
+        s.delete(solicitacao)
+        apagadas += 1
+    return apagadas
+
+
+def excluir_titular(s: Session, titular_id: int) -> dict:
+    """Apaga o titular e tudo o que é dele. Não tem volta."""
+    titular = s.get(Titular, titular_id)
+    if titular is None:
+        raise ErroDeUso("Titular não encontrado.")
+    nome = titular.nome
+    certidoes = list(s.scalars(select(Certidao).where(Certidao.titular_id == titular_id)))
+    quantas = len(certidoes)
+    for certidao in certidoes:
+        excluir_certidao(s, certidao.id)
+    solicitacoes = list(s.scalars(select(Solicitacao).where(Solicitacao.titular_id == titular_id)))
+    for solicitacao in solicitacoes:
+        s.delete(solicitacao)
+    for monitoramento in s.scalars(select(Monitoramento).where(Monitoramento.titular_id == titular_id)):
+        s.delete(monitoramento)
+    s.flush()
+    s.delete(titular)
+    registrar_evento(s, "titular", titular_id, "excluido",
+                     f"{nome} e {quantas} certidão(ões) excluídos definitivamente.")
+    return {"titular": nome, "certidoes": quantas, "solicitacoes": len(solicitacoes)}
+
+
 def anotar(s: Session, solicitacao: Solicitacao, tipo: str, mensagem: str) -> None:
     registro = list(solicitacao.registro or [])
     registro.append({"em": datetime.now().strftime("%d/%m/%Y %H:%M:%S"), "tipo": tipo, "mensagem": mensagem})

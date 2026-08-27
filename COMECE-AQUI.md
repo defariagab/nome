@@ -66,6 +66,15 @@ Ele confere cada documento antes de arquivar e recusa páginas de erro e avisos 
 instabilidade, dizendo o motivo. Uma emissão que falha assim é tentada de novo
 mais tarde, sozinha.
 
+**Como apago o que entrou errado?**
+Em Solicitações, *Limpar encerradas* tira da lista o que falhou. No Acervo há
+*Excluir* em cada certidão (apaga o PDF junto). No cadastro do titular há
+*Excluir titular*, que mostra antes tudo o que será apagado.
+
+**Uma emissão falhou e não sei por quê.**
+Em Solicitações, clique em *Detalhes* para ver o passo a passo, ou em
+*Baixar diagnóstico* para exportar o histórico e enviar a quem dá suporte.
+
 **Onde ficam meus arquivos?**
 Numa pasta só, `.certidoes` dentro da sua pasta de usuário: banco de dados, PDFs
 organizados por titular e ano, e as sessões de navegador. Backup = copiar essa

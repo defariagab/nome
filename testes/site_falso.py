@@ -33,11 +33,20 @@ PAGINA = """<!doctype html><html lang="pt-BR"><body>
 <h1>Emissao de certidao</h1>
 <form method="post" action="/emitir">
   <input type="text" id="doc" name="doc">
-  <img id="cap" src="{captcha}" alt="captcha">
+  <img id="cap" alt="captcha">
+  <script>
+    // como no site do TST: o elemento existe antes de a imagem chegar
+    setTimeout(function () {{ document.getElementById('cap').src = "{captcha}"; }}, 700);
+  </script>
   <input type="text" id="resp" name="resp">
   <input type="text" id="escondido" name="escondido" style="display:none">
   <input type="radio" id="tipo-cnpj" name="tipo" value="cnpj">
   <button type="submit" id="ok">Emitir</button>
+</form>
+<form method="post" action="/emitir" target="_blank">
+  <input type="hidden" name="doc" value="popup">
+  <input type="hidden" name="resp" value="janela-nova">
+  <button type="submit" id="ok-popup">Emitir em nova janela</button>
 </form>
 </body></html>"""
 
@@ -94,6 +103,16 @@ class Manipulador(BaseHTTPRequestHandler):
                 "<p>Validade: 26/09/2026</p></body></html>"
             )
             self._responder(corpo.encode(), "text/html; charset=utf-8")
+            return
+
+        if campos.get("resp", [""])[0] == "janela-nova":
+            # alguns órgãos entregam o arquivo numa aba nova
+            self._responder(
+                gerar(["Certidao n. 7777/2026", "Validade: 01/01/2027", "CERTIDAO NEGATIVA"],
+                      "Certidao em nova janela"),
+                "application/pdf",
+                {"Content-Disposition": 'attachment; filename="certidao.pdf"'},
+            )
             return
 
         if campos.get("resp", [""])[0].strip().lower() != RESPOSTA_CAPTCHA["valor"]:

@@ -157,15 +157,37 @@ def atualizar_titular(titular_id: int, dados: DadosTitular):
 
 
 @app.delete("/api/titulares/{titular_id}")
-def desativar_titular(titular_id: int):
-    """Desativa sem apagar: o acervo de certidões é prova e deve ser preservado."""
+def remover_titular(titular_id: int, definitivo: bool = False):
+    """Desativa por padrão — o acervo é prova. `definitivo` apaga tudo do titular."""
     with sessao() as s:
         titular = s.get(Titular, titular_id)
         if titular is None:
             raise HTTPException(404, "Titular não encontrado.")
+        if definitivo:
+            return {"ok": True, "excluido": servicos.excluir_titular(s, titular_id)}
         titular.ativo = False
         servicos.registrar_evento(s, "titular", titular_id, "desativado", f"{titular.nome} desativado.")
     return {"ok": True}
+
+
+@app.get("/api/titulares/{titular_id}/o-que-sera-excluido")
+def prever_exclusao(titular_id: int):
+    """O que some se o titular for apagado — para a pessoa decidir sabendo."""
+    from sqlalchemy import func as funcao
+
+    with sessao() as s:
+        titular = s.get(Titular, titular_id)
+        if titular is None:
+            raise HTTPException(404, "Titular não encontrado.")
+        return {
+            "titular": titular.nome,
+            "certidoes": s.scalar(
+                select(funcao.count(Certidao.id)).where(Certidao.titular_id == titular_id)
+            ) or 0,
+            "solicitacoes": s.scalar(
+                select(funcao.count(Solicitacao.id)).where(Solicitacao.titular_id == titular_id)
+            ) or 0,
+        }
 
 
 # --------------------------------------------------------------------------- #
@@ -309,6 +331,45 @@ async def anexar(
 # Desafios (captcha, login, ação manual)
 # --------------------------------------------------------------------------- #
 
+@app.delete("/api/solicitacoes/{solicitacao_id}")
+def excluir_solicitacao(solicitacao_id: int):
+    with sessao() as s:
+        servicos.excluir_solicitacao(s, solicitacao_id)
+    return {"ok": True}
+
+
+@app.post("/api/solicitacoes/limpar")
+def limpar_solicitacoes(incluir_concluidas: bool = False):
+    """Tira da lista o que já terminou. As certidões continuam no acervo."""
+    with sessao() as s:
+        return {"removidas": servicos.limpar_solicitacoes(s, incluir_concluidas)}
+
+
+@app.get("/api/diagnostico/emissoes")
+def diagnostico_das_solicitacoes(limite: int = Query(40, le=200)):
+    """Relatório do que aconteceu em cada emissão, para enviar a quem dá suporte."""
+    linhas = [f"# Diagnóstico das emissões — {datetime.now().isoformat(timespec='seconds')}", ""]
+    with sessao() as s:
+        consulta = select(Solicitacao).order_by(Solicitacao.id.desc()).limit(limite)
+        for item in s.scalars(consulta):
+            titular, tipo = _nomes(s, item.titular_id, item.tipo_certidao_id)
+            linhas.append(f"## #{item.id} {tipo} — {titular}")
+            linhas.append(f"- estado: {item.estado.value} | origem: {item.origem} "
+                          f"| tentativas: {item.tentativas}")
+            linhas.append(f"- mensagem: {item.mensagem or '(nenhuma)'}")
+            if item.diagnostico:
+                linhas.append(f"- detalhe técnico: {item.diagnostico}")
+            for registro in (item.registro or []):
+                linhas.append(f"    {registro['em']}  {registro['tipo']}: {registro['mensagem']}")
+            linhas.append("")
+    conteudo = "\n".join(linhas)
+    return Response(
+        content=conteudo.encode("utf-8"),
+        media_type="text/markdown",
+        headers={"Content-Disposition": 'attachment; filename="diagnostico-emissoes.md"'},
+    )
+
+
 @app.get("/api/desafios")
 def listar_desafios():
     with sessao() as s:
@@ -380,6 +441,14 @@ def baixar_dossie(titular_id: int):
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{nome}"'},
     )
+
+
+@app.delete("/api/certidoes/{certidao_id}")
+def excluir_certidao(certidao_id: int):
+    """Remove a certidão e o arquivo — para tirar do acervo o que entrou errado."""
+    with sessao() as s:
+        servicos.excluir_certidao(s, certidao_id)
+    return {"ok": True}
 
 
 @app.get("/api/eventos")

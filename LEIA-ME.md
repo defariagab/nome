@@ -40,6 +40,20 @@ O painel classifica cada linha em **vigente**, **vence em breve**, **vencida**,
 nome. Certidão positiva não entra em renovação automática: reemitir não resolve
 débito, e o sistema não finge que resolve.
 
+### Excluir e limpar
+
+Nada é apagado por acidente, e nada fica preso:
+
+- **Solicitações**: excluir uma de cada vez, ou *Limpar encerradas*, que tira da
+  lista o que falhou ou foi cancelado. As certidões arquivadas não são tocadas.
+  Solicitação em andamento precisa ser cancelada antes.
+- **Certidões**: excluir do acervo apaga também o PDF. Se havia uma versão
+  anterior, ela volta a valer — é assim que se tira do sistema um documento que
+  entrou errado.
+- **Titulares**: por padrão são **desativados** (somem do painel, o acervo fica).
+  A exclusão definitiva existe, mostra antes quantas certidões e solicitações
+  serão apagadas, e leva os PDFs junto.
+
 ### Nome dos arquivos
 
 Todo PDF arquivado recebe um nome segundo o padrão do escritório, definido em
@@ -204,6 +218,14 @@ na sua máquina; as duas últimas, de um ajuste de seletores. Por isso todas
 declaram `ao_falhar: pedir_anexo`: mesmo antes do acerto fino, o pior caso é você
 concluir na janela já aberta na página certa. Cada tipo mostra no Catálogo a data
 em que sua fonte foi conferida.
+
+### Quando uma emissão falha
+
+Cada solicitação guarda o passo a passo do que aconteceu — visível em
+*Detalhes*, na aba Solicitações. O botão **Baixar diagnóstico** exporta esse
+histórico das últimas emissões num arquivo de texto, com estado, mensagem,
+detalhe técnico e a sequência de passos de cada uma. É o que permite descobrir
+por que uma fonte parou de funcionar sem precisar reproduzir o problema.
 
 ### Conferir se as fontes ainda funcionam
 

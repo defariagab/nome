@@ -70,8 +70,14 @@
       <div class="bloco">
         <div class="bloco-cabecalho">
           <h2>Solicitações</h2>
-          <span class="apoio">O que o sistema está fazendo agora e o que já fez.</span>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+            <a class="botao secundario miudo" href="/api/diagnostico/emissoes"
+               style="text-decoration:none">Baixar diagnóstico</a>
+            <button class="botao secundario miudo" id="botao-limpar-solicitacoes">Limpar encerradas</button>
+          </div>
         </div>
+        <p class="apoio" style="padding:0 18px">O que o sistema está fazendo agora e o que já fez.
+          "Limpar encerradas" tira da lista o que falhou ou foi cancelado — as certidões arquivadas ficam.</p>
         <div id="lista-solicitacoes"></div>
       </div>
     </section>

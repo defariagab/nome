@@ -9,6 +9,7 @@ instalado.
 from __future__ import annotations
 
 import asyncio
+import base64
 
 import pytest
 
@@ -39,10 +40,12 @@ def _navegador_disponivel() -> bool:
         return False
 
 
-def _contexto(url: str, respostas: list[str], captcha_de) -> Contexto:
+def _contexto(url: str, respostas: list[str], captcha_de, imagens: list | None = None) -> Contexto:
     """Faz o papel da pessoa que responde ao captcha na tela."""
 
     async def perguntar(*, tipo, instrucao, imagem=None, timeout=300):
+        if imagens is not None and imagem:
+            imagens.append(imagem)
         return respostas.pop(0) if respostas else captcha_de()
 
     return Contexto(
@@ -71,9 +74,16 @@ def test_preenche_resolve_captcha_e_baixa_o_pdf():
             ]}),
         ],
     )
+    imagens = []
     with SiteFalso() as site:
-        contexto = _contexto(site.url, [], lambda: site_falso.RESPOSTA_CAPTCHA["valor"])
+        contexto = _contexto(site.url, [], lambda: site_falso.RESPOSTA_CAPTCHA["valor"], imagens)
         resultado = asyncio.run(executar(fonte, contexto, motor="navegador"))
+
+    # A imagem chega à tela por JavaScript, depois do elemento existir: se a
+    # foto for tirada cedo demais, a pessoa recebe um captcha em branco.
+    assert imagens, "nenhuma imagem de captcha foi apresentada"
+    dados_da_imagem = base64.b64decode(imagens[0].split(",", 1)[1])
+    assert len(dados_da_imagem) > 1000, "a imagem do captcha veio em branco"
 
     assert resultado.sucesso
     assert resultado.documento.startswith(b"%PDF")
@@ -178,3 +188,21 @@ def test_pagina_de_indisponibilidade_nao_vira_certidao():
         contexto.variaveis["documento"] = "00000000000000"  # dispara a resposta de erro
         with pytest.raises(ErroAutomacao, match="aviso"):
             asyncio.run(executar(fonte, contexto, motor="navegador"))
+
+
+@pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
+def test_download_em_aba_nova_tambem_e_capturado():
+    """Vários órgãos entregam o arquivo numa janela nova — ele não pode se perder."""
+    fonte = Fonte(
+        codigo="teste", nome="Certidão de teste", url="{url}", resultado="download",
+        passos=[
+            Passo("abrir", {"url": "{url}"}),
+            Passo("clicar", {"seletor": "#ok-popup"}),
+            Passo("aguardar_download", {"timeout": 20}),
+        ],
+    )
+    with SiteFalso() as site:
+        resultado = asyncio.run(executar(fonte, _contexto(site.url, [], lambda: ""), motor="navegador"))
+
+    assert resultado.sucesso
+    assert resultado.numero == "7777/2026"
