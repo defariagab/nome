@@ -8,15 +8,13 @@ comando de terminal para o uso do dia a dia.
 
 ## Começar
 
-1. Instale o Python 3.10 ou mais novo ([python.org](https://www.python.org/downloads/) —
-   no Windows, marque *Add Python to PATH* na instalação).
-2. Dê dois cliques em **`iniciar.bat`** (Windows) ou **`iniciar.command`** (macOS/Linux).
-   Na primeira vez ele instala o que falta; depois abre o painel sozinho no navegador.
-3. Para a automação em navegador, uma vez só, instale o Chromium do Playwright:
+Se você não programa, siga o **[COMECE-AQUI.md](COMECE-AQUI.md)** — são quatro passos.
 
-   ```
-   python -m playwright install chromium
-   ```
+Resumindo: instale o Python 3.10 ou mais novo e dê dois cliques em **`iniciar.bat`**
+(Windows) ou **`iniciar.command`** (macOS/Linux). Na primeira vez ele instala as
+bibliotecas **e o navegador do Playwright** sozinho, e depois abre o painel. Se o
+navegador não puder ser instalado, o sistema abre assim mesmo: o controle de
+validade e o arquivo de PDFs não dependem dele.
 
 Quer conhecer o sistema antes de cadastrar clientes de verdade?
 
@@ -158,6 +156,30 @@ declaram `ao_falhar: pedir_anexo`: mesmo antes do acerto fino, o pior caso é vo
 concluir na janela já aberta na página certa. Cada tipo mostra no Catálogo a data
 em que sua receita foi conferida.
 
+### Conferir se as receitas ainda funcionam
+
+**Configurações › Conferir as receitas** percorre cada site de órgão e diz até onde
+a receita ainda funciona — **sem emitir nada**: para antes do botão de emissão e
+antes de qualquer captcha. Quando um campo não é achado, o relatório traz a lista
+dos campos que a página tem hoje, com o seletor de cada um, mais uma captura da
+tela: é o suficiente para corrigir a receita sem abrir o site de novo. O relatório
+fica em `.certidoes/diagnostico/` em duas versões (JSON e texto), para enviar a
+quem for consertar. Pela linha de comando:
+
+```
+python -m certidoes conferir           # --ver mostra a janela do navegador
+```
+
+Os dados usados na conferência são fictícios: nenhum documento de cliente entra no
+relatório.
+
+### Dossiê de regularidade
+
+O botão **Dossiê**, na lista de titulares, gera um PDF único com todas as certidões
+vigentes daquele titular, com folha de rosto listando órgão, número e validade de
+cada uma. Certidão vencida ou positiva fica de fora, e de cada tipo entra só a mais
+recente — é o documento que a habilitação de uma licitação pede.
+
 ### Mapear um site novo, sem programar
 
 **Configurações › Mapear um site novo** abre o endereço que você informar, espera
@@ -222,6 +244,8 @@ certidoes/
   fila.py         executa as solicitações, uma a uma
   agenda.py       renovação automática antes do vencimento
   nomeacao.py     padrão de nome dos PDFs arquivados
+  diagnostico.py  conferência das receitas contra os sites reais
+  dossie.py       PDF único com as certidões vigentes de um titular
   catalogo/       catálogo de certidões (YAML)
   receitas/       uma receita por órgão (YAML)
   automacao/      motor de navegador, simulador, captcha, inspeção e leitura do PDF
@@ -232,8 +256,8 @@ testes/           inclui uma réplica local de portal para testar o navegador
 
 ## Próximos passos naturais
 
-1. Rodar as quatro receitas contra os sites de produção, ajustar os seletores da
-   Receita e do CJF com o mapeador e marcar a data de conferência.
+1. Rodar **Configurações › Conferir as receitas** na máquina do escritório e
+   ajustar os seletores da Receita e do CJF com o relatório gerado.
 2. Mapear o TJ estadual de maior volume no escritório e a SEFAZ da UF principal.
 3. Aviso por e-mail dos vencimentos (hoje o alerta é o painel).
 4. Exportar o "dossiê de habilitação": um PDF único com todas as certidões vigentes

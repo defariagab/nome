@@ -363,6 +363,24 @@ def baixar_certidao(certidao_id: int):
         return FileResponse(caminho, media_type="application/pdf", filename=nome)
 
 
+@app.get("/api/titulares/{titular_id}/dossie")
+def baixar_dossie(titular_id: int):
+    """Um PDF único com as certidões vigentes — o que a licitação pede."""
+    from ..dossie import SemCertidoes, montar
+
+    with sessao() as s:
+        try:
+            conteudo, nome = montar(s, titular_id)
+        except SemCertidoes as erro:
+            raise servicos.ErroDeUso(str(erro)) from erro
+        servicos.registrar_evento(s, "titular", titular_id, "dossie", "Dossiê de regularidade gerado.")
+    return Response(
+        content=conteudo,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{nome}"'},
+    )
+
+
 @app.get("/api/eventos")
 def listar_eventos(limite: int = Query(50, le=200)):
     with sessao() as s:
@@ -405,6 +423,41 @@ def salvar_preferencias(dados: Preferencias):
     with sessao() as s:
         servicos.definir_preferencia(s, "padrao_nome_arquivo", padrao)
     return {"padrao_nome_arquivo": padrao, "exemplo": nomeacao.exemplo(padrao)}
+
+
+class PedidoConferencia(BaseModel):
+    codigos: list[str] = Field(default_factory=list)
+    #: mostrar a janela do navegador enquanto confere
+    visivel: bool = False
+
+
+@app.post("/api/diagnostico")
+async def conferir_receitas(pedido: PedidoConferencia):
+    """Percorre as receitas nos sites reais, sem emitir nada, e guarda o relatório."""
+    from ..diagnostico import conferir_todas, salvar_relatorio
+
+    try:
+        relatorio = await conferir_todas(pedido.codigos or None, visivel=pedido.visivel)
+    except Exception as erro:
+        raise servicos.ErroDeUso(
+            f"Não consegui conferir as receitas: {erro}. Confira se o navegador do "
+            "Playwright está instalado."
+        ) from erro
+    caminho = salvar_relatorio(relatorio)
+    relatorio["arquivo"] = caminho.name
+    return relatorio
+
+
+@app.get("/api/diagnostico/relatorio")
+def baixar_relatorio():
+    """Entrega o relatório mais recente, para enviar a quem vai corrigir a receita."""
+    pasta = config.pasta_dados / "diagnostico"
+    arquivos_md = sorted(pasta.glob("conferencia-*.md")) if pasta.exists() else []
+    if not arquivos_md:
+        raise HTTPException(404, "Nenhuma conferência foi feita ainda.")
+    return FileResponse(
+        arquivos_md[-1], media_type="text/markdown", filename=arquivos_md[-1].name
+    )
 
 
 class PedidoInspecao(BaseModel):

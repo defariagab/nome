@@ -150,15 +150,7 @@ function desenharPainel() {
   const linhas = estado.painel.filter((l) => !permitidos || permitidos.includes(l.status));
 
   if (!estado.painel.length) {
-    $("#tabela-painel").replaceChildren(
-      el("div", { class: "vazio" }, [
-        el("strong", {}, "Nenhuma certidão em acompanhamento ainda"),
-        el("div", {}, "Cadastre um titular e escolha quais certidões ele precisa manter vigentes."),
-        el("div", { style: "margin-top:14px" }, [
-          el("button", { class: "botao primario", onclick: () => formularioTitular() }, "Cadastrar primeiro titular"),
-        ]),
-      ])
-    );
+    $("#tabela-painel").replaceChildren(primeirosPassos());
     return;
   }
 
@@ -212,6 +204,40 @@ function desenharPainel() {
   $("#tabela-painel").replaceChildren(tabela);
 }
 
+function passo(numero, titulo, texto, acao) {
+  return el("div", { style: "display:flex; gap:14px; align-items:flex-start; padding:14px 0; border-top:1px solid var(--borda)" }, [
+    el("div", {
+      style: "flex-shrink:0; width:28px; height:28px; border-radius:50%; background:var(--primaria-clara);" +
+             "color:var(--primaria); display:grid; place-items:center; font-weight:700; font-size:14px",
+    }, String(numero)),
+    el("div", { style: "flex:1" }, [
+      el("div", { class: "principal" }, titulo),
+      el("div", { class: "secundaria", style: "margin:2px 0 8px" }, texto),
+      acao,
+    ]),
+  ]);
+}
+
+function primeirosPassos() {
+  return el("div", { style: "padding:22px 26px" }, [
+    el("h3", { style: "margin:0 0 4px" }, "Primeiros passos"),
+    el("p", { class: "apoio", style: "margin-bottom:6px" },
+      "Três coisas e o sistema passa a trabalhar sozinho."),
+    passo(1, "Cadastre um titular",
+      "A pessoa ou empresa e quais certidões ela precisa manter vigentes.",
+      el("button", { class: "botao primario miudo", onclick: () => formularioTitular() },
+        "Cadastrar titular")),
+    passo(2, "Confira as receitas",
+      "O sistema abre cada site de órgão e verifica se ainda sabe operá-lo. Não emite nada.",
+      el("button", { class: "botao secundario miudo", onclick: () => irPara("configuracoes") },
+        "Ir para a conferência")),
+    passo(3, "Deixe emitir",
+      "O painel mostra o que falta e o sistema renova antes de vencer. Quando um site pedir " +
+      "captcha ou login gov.br, esta tela avisa.",
+      el("span", { class: "secundaria" }, "Nada a fazer agora.")),
+  ]);
+}
+
 async function emitir(linha, botao) {
   if (botao) { botao.disabled = true; botao.textContent = "Enviando..."; }
   try {
@@ -246,6 +272,11 @@ function desenharTitulares() {
       el("td", {}, [t.municipio, t.uf].filter(Boolean).join(" / ") || "—"),
       el("td", {}, `${t.monitoramentos.length} certidão(ões)`),
       el("td", { class: "acoes" }, [
+        el("a", {
+          class: "botao secundario miudo", href: `/api/titulares/${t.id}/dossie`, target: "_blank",
+          title: "Um PDF único com as certidões vigentes deste titular",
+          style: "text-decoration:none; margin-right:6px",
+        }, "Dossiê"),
         el("button", { class: "botao secundario miudo", onclick: () => formularioTitular(t) }, "Editar"),
       ]),
     ])
@@ -749,7 +780,41 @@ async function desenharConfiguracoes() {
     }
   });
 
+  /* --- conferência das receitas contra os sites reais --- */
+  const verNavegador = el("input", { type: "checkbox" });
+  const resultadoConferencia = el("div", {});
+  const conferir = el("button", { class: "botao primario" }, "Conferir agora");
+  conferir.addEventListener("click", async () => {
+    conferir.disabled = true;
+    conferir.textContent = "Conferindo nos sites dos órgãos...";
+    resultadoConferencia.replaceChildren(
+      el("p", { class: "apoio" }, "Isso leva um ou dois minutos. Nenhuma certidão é emitida.")
+    );
+    try {
+      const relatorio = await api("/api/diagnostico", {
+        method: "POST", body: JSON.stringify({ visivel: verNavegador.checked }),
+      });
+      desenharConferencia(relatorio, resultadoConferencia);
+    } finally {
+      conferir.disabled = false;
+      conferir.textContent = "Conferir agora";
+    }
+  });
+
   $("#conteudo-configuracoes").replaceChildren(
+    el("div", { class: "bloco" }, [
+      el("div", { class: "bloco-cabecalho" }, el("h2", {}, "Conferir as receitas")),
+      el("div", { style: "padding:18px" }, [
+        el("p", { class: "apoio" },
+          "Percorre cada site de órgão e diz até onde a receita ainda funciona. Não emite nada: " +
+          "para antes do botão de emissão e antes de qualquer captcha. Rode depois de instalar e " +
+          "sempre que uma emissão começar a falhar."),
+        el("label", { class: "alternador", style: "margin:10px 0" },
+          [verNavegador, "mostrar a janela do navegador enquanto confere"]),
+        conferir,
+        resultadoConferencia,
+      ]),
+    ]),
     el("div", { class: "bloco" }, [
       el("div", { class: "bloco-cabecalho" }, el("h2", {}, "Nome dos arquivos")),
       el("div", { style: "padding:18px" }, [
@@ -776,6 +841,64 @@ async function desenharConfiguracoes() {
         resultado,
       ]),
     ])
+  );
+}
+
+const SELO_CONFERENCIA = {
+  pronta: ["vigente", "A receita está de pé"],
+  parcial: ["vence_em_breve", "Atenção"],
+  quebrada: ["vencida", "Precisa de ajuste"],
+};
+
+function desenharConferencia(relatorio, destino) {
+  const cartoes = relatorio.receitas.map((receita) => {
+    const [classe, rotulo] = SELO_CONFERENCIA[receita.situacao] || ["ausente", receita.situacao];
+    const passos = (receita.passos || []).map((passo) => {
+      const marca = { ok: "✓", pulado: "–", nao_encontrado: "✗", erro: "✗" }[passo.resultado] || "?";
+      return el("div", { class: "secundaria" },
+        `${marca} ${passo.acao} ${passo.seletor || ""}${passo.detalhe ? " — " + passo.detalhe : ""}`);
+    });
+    const campos = (receita.campos_da_pagina || []).length
+      ? el("details", { style: "margin-top:10px" }, [
+          el("summary", { class: "secundaria" },
+            `Campos que a página tem hoje (${receita.campos_da_pagina.length})`),
+          el("table", {}, el("tbody", {}, receita.campos_da_pagina.slice(0, 40).map((campo) =>
+            el("tr", {}, [
+              el("td", {}, campo.sugestao),
+              el("td", {}, el("code", {}, campo.seletor)),
+              el("td", { class: "secundaria" }, campo.rotulo || campo.texto || campo.alternativo || ""),
+            ])
+          ))),
+        ])
+      : null;
+    return el("div", { style: "border-top:1px solid var(--borda); padding:14px 0" }, [
+      el("div", {}, [
+        el("span", { class: `pilula ${classe}` }, rotulo),
+        el("strong", { style: "margin-left:8px" }, receita.nome),
+      ]),
+      el("p", { class: "apoio", style: "margin:6px 0" }, receita.mensagem),
+      ...passos,
+      campos,
+      receita.captura
+        ? el("details", {}, [
+            el("summary", { class: "secundaria" }, "Ver a tela no momento da falha"),
+            el("img", { src: receita.captura, style: "max-width:100%; border:1px solid var(--borda); border-radius:6px; margin-top:8px" }),
+          ])
+        : null,
+    ]);
+  });
+
+  const quebradas = relatorio.receitas.filter((r) => r.situacao === "quebrada").length;
+  destino.replaceChildren(
+    el("p", { style: "margin-top:16px" },
+      quebradas
+        ? `${quebradas} receita(s) precisam de ajuste. Baixe o relatório e envie para quem cuida do sistema.`
+        : "Todas as receitas conferidas estão de pé."),
+    el("a", {
+      class: "botao secundario", href: "/api/diagnostico/relatorio",
+      style: "text-decoration:none; display:inline-block; margin-bottom:8px",
+    }, "Baixar relatório"),
+    ...cartoes,
   );
 }
 

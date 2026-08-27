@@ -158,3 +158,33 @@ def test_catalogo_traz_os_portais_novos(cliente):
     assert "servicos.receitafederal.gov.br" in tipos["rfb_pgfn_conjunta"]["url"]
     assert "certidao-unificada.cjf.jus.br" in tipos["jf_certidao_unificada"]["url"]
     assert "TRF6" in tipos["jf_certidao_unificada"]["observacoes"]
+
+
+def test_dossie_reune_as_certidoes_vigentes(cliente):
+    from certidoes.automacao.pdf_simples import gerar
+
+    tipos = {t["codigo"]: t for t in cliente.get("/api/tipos").json()}
+    titular = criar_titular(cliente, monitoramentos=[tipos["cndt"]["id"]]).json()
+
+    solicitacao = cliente.post(
+        "/api/solicitacoes", json={"titular_id": titular["id"], "tipo_id": tipos["cndt"]["id"]}
+    ).json()
+    pdf = gerar(["Certidao n. 90/2026", "Validade: 31/12/2030", "CERTIDAO NEGATIVA"], "CNDT")
+    cliente.post(f"/api/solicitacoes/{solicitacao['id']}/anexar",
+                 files={"arquivo": ("c.pdf", pdf, "application/pdf")})
+
+    resposta = cliente.get(f"/api/titulares/{titular['id']}/dossie")
+    assert resposta.status_code == 200
+    assert resposta.content.startswith(b"%PDF")
+    assert "dossie_11222333000181" in resposta.headers["content-disposition"]
+
+
+def test_dossie_sem_certidao_explica_o_que_fazer(cliente):
+    titular = criar_titular(cliente).json()
+    resposta = cliente.get(f"/api/titulares/{titular['id']}/dossie")
+    assert resposta.status_code == 400
+    assert "Emita ou anexe" in resposta.json()["erro"]
+
+
+def test_relatorio_de_conferencia_so_existe_depois_de_conferir(cliente):
+    assert cliente.get("/api/diagnostico/relatorio").status_code == 404

@@ -18,6 +18,8 @@ def principal(argumentos: list[str] | None = None) -> int:
     sub.add_parser("renovar", help="verifica vencimentos e enfileira as renovações")
     sub.add_parser("catalogo", help="recarrega o catálogo de tipos de certidão")
     sub.add_parser("demonstracao", help="cria titulares fictícios para conhecer o sistema")
+    conferir = sub.add_parser("conferir", help="confere as receitas nos sites reais, sem emitir nada")
+    conferir.add_argument("--ver", action="store_true", help="mostrar a janela do navegador")
     inspecionar = sub.add_parser("inspecionar", help="lista os campos de um site, para escrever a receita")
     inspecionar.add_argument("url")
     inspecionar.add_argument("--espera", type=int, default=0,
@@ -36,6 +38,17 @@ def principal(argumentos: list[str] | None = None) -> int:
 
         iniciar_banco()
         print(f"{carregar()} tipo(s) novo(s) no catálogo.")
+        return 0
+
+    if opcoes.comando == "conferir":
+        import asyncio
+
+        from .diagnostico import conferir_todas, em_texto, salvar_relatorio
+
+        iniciar_banco()
+        relatorio = asyncio.run(conferir_todas(visivel=opcoes.ver))
+        print(em_texto(relatorio))
+        print(f"Relatório salvo em {salvar_relatorio(relatorio)}")
         return 0
 
     if opcoes.comando == "inspecionar":
