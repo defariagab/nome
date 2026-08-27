@@ -1,0 +1,734 @@
+/* Painel de certidões — sem framework, sem build: abre e funciona. */
+
+const estado = {
+  pagina: "painel",
+  filtro: null,
+  tipos: [],
+  titulares: [],
+  painel: [],
+  desafioAtual: null,
+  desafiosAdiados: new Set(),
+  resumo: null,
+};
+
+const $ = (seletor) => document.querySelector(seletor);
+const el = (tag, atributos = {}, filhos = []) => {
+  const no = document.createElement(tag);
+  for (const [chave, valor] of Object.entries(atributos)) {
+    if (chave === "class") no.className = valor;
+    else if (chave === "html") no.innerHTML = valor;
+    else if (chave.startsWith("on")) no.addEventListener(chave.slice(2), valor);
+    else if (valor !== null && valor !== undefined) no.setAttribute(chave, valor);
+  }
+  for (const filho of [].concat(filhos)) {
+    if (filho === null || filho === undefined) continue;
+    no.append(filho.nodeType ? filho : document.createTextNode(filho));
+  }
+  return no;
+};
+
+/* ------------------------------------------------------------------ avisos */
+function avisar(texto, tipo = "") {
+  const aviso = el("div", { class: `aviso ${tipo}` }, texto);
+  $("#avisos").append(aviso);
+  setTimeout(() => aviso.remove(), 5000);
+}
+
+/* --------------------------------------------------------------------- api */
+async function api(caminho, opcoes = {}) {
+  const resposta = await fetch(caminho, {
+    headers: opcoes.body instanceof FormData ? {} : { "Content-Type": "application/json" },
+    ...opcoes,
+  });
+  const texto = await resposta.text();
+  const dados = texto ? JSON.parse(texto) : null;
+  if (!resposta.ok) {
+    const mensagem = dados?.erro || dados?.detail || "Não foi possível concluir a operação.";
+    avisar(typeof mensagem === "string" ? mensagem : "Erro inesperado.", "erro");
+    throw new Error(mensagem);
+  }
+  return dados;
+}
+
+/* ---------------------------------------------------------------- formatos */
+const dataBR = (iso) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+
+function prazoLegivel(dias) {
+  if (dias === null || dias === undefined) return "";
+  if (dias < 0) return `vencida há ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? "" : "s"}`;
+  if (dias === 0) return "vence hoje";
+  if (dias === 1) return "vence amanhã";
+  return `${dias} dias restantes`;
+}
+
+const ROTULO_ESTADO = {
+  na_fila: "Na fila",
+  executando: "Em andamento",
+  aguardando_humano: "Precisa de você",
+  aguardando_anexo: "Aguardando o PDF",
+  concluida: "Concluída",
+  falhou: "Falhou",
+  cancelada: "Cancelada",
+};
+
+function mascararDocumento(valor) {
+  const digitos = valor.replace(/\D/g, "").slice(0, 14);
+  if (digitos.length <= 11) {
+    return digitos
+      .replace(/^(\d{3})(\d)/, "$1.$2")
+      .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/\.(\d{3})(\d{1,2})$/, ".$1-$2");
+  }
+  return digitos
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1/$2")
+    .replace(/(\d{4})(\d{1,2})$/, "$1-$2");
+}
+
+/* ------------------------------------------------------------------ modais */
+function abrirModal(titulo, corpo, botoes = []) {
+  $("#modal-titulo").textContent = titulo;
+  $("#modal-corpo").replaceChildren(corpo);
+  $("#modal-rodape").replaceChildren(...botoes);
+  $("#cortina").classList.remove("oculto");
+}
+const fecharModal = () => $("#cortina").classList.add("oculto");
+
+/* ------------------------------------------------------------------ painel */
+function cartao(valor, rotulo, classe, aoClicar) {
+  return el("div", { class: `cartao ${classe}`, ...(aoClicar ? { onclick: aoClicar } : {}) }, [
+    el("div", { class: "valor" }, String(valor)),
+    el("div", { class: "rotulo" }, rotulo),
+  ]);
+}
+
+function desenharCartoes() {
+  const r = estado.resumo;
+  if (!r) return;
+  const p = r.por_status;
+  const cartoes = [
+    cartao(p.vencida + p.ausente, "Vencidas ou nunca emitidas", "alerta", () => filtrar("vencida,ausente")),
+    cartao(p.vence_em_breve, "Vencem nos próximos dias", "atencao", () => filtrar("vence_em_breve")),
+    cartao(p.vigente, "Vigentes", "bom", () => filtrar("vigente")),
+    cartao(p.irregular, "Positivas (com débitos)", "acao", () => filtrar("irregular")),
+  ];
+  if (r.aguardando_humano > 0) {
+    cartoes.push(cartao(r.aguardando_humano, "Pedidos de ajuda abertos", "acao", () => irPara("solicitacoes")));
+  }
+  $("#cartoes").replaceChildren(...cartoes);
+}
+
+function filtrar(status) {
+  estado.filtro = estado.filtro === status ? null : status;
+  irPara("painel");
+  desenharPainel();
+}
+
+function desenharFiltros() {
+  const opcoes = [
+    ["Tudo", null],
+    ["Vencidas", "vencida"],
+    ["Vencendo", "vence_em_breve"],
+    ["Não emitidas", "ausente"],
+    ["Vigentes", "vigente"],
+  ];
+  $("#filtros-status").replaceChildren(
+    ...opcoes.map(([rotulo, valor]) =>
+      el("button", {
+        class: `filtro ${estado.filtro === valor ? "ativo" : ""}`,
+        onclick: () => { estado.filtro = valor; desenharPainel(); },
+      }, rotulo)
+    )
+  );
+}
+
+function desenharPainel() {
+  desenharFiltros();
+  const permitidos = estado.filtro ? estado.filtro.split(",") : null;
+  const linhas = estado.painel.filter((l) => !permitidos || permitidos.includes(l.status));
+
+  if (!estado.painel.length) {
+    $("#tabela-painel").replaceChildren(
+      el("div", { class: "vazio" }, [
+        el("strong", {}, "Nenhuma certidão em acompanhamento ainda"),
+        el("div", {}, "Cadastre um titular e escolha quais certidões ele precisa manter vigentes."),
+        el("div", { style: "margin-top:14px" }, [
+          el("button", { class: "botao primario", onclick: () => formularioTitular() }, "Cadastrar primeiro titular"),
+        ]),
+      ])
+    );
+    return;
+  }
+
+  const corpo = linhas.map((linha) => {
+    const acoes = [];
+    if (linha.solicitacao_em_andamento) {
+      acoes.push(el("span", { class: "pilula andamento" }, ROTULO_ESTADO[linha.estado_solicitacao] || "Em andamento"));
+    } else {
+      acoes.push(el("button", {
+        class: "botao secundario miudo",
+        onclick: (evento) => emitir(linha, evento.target),
+      }, linha.status === "ausente" ? "Emitir" : "Renovar"));
+    }
+    if (linha.certidao_id && linha.tem_arquivo) {
+      acoes.push(el("a", {
+        class: "botao secundario miudo",
+        href: `/api/certidoes/${linha.certidao_id}/arquivo`,
+        target: "_blank",
+        style: "margin-left:6px; text-decoration:none;",
+      }, "PDF"));
+    }
+
+    return el("tr", {}, [
+      el("td", {}, [
+        el("div", { class: "principal" }, linha.titular),
+        el("div", { class: "secundaria" }, linha.documento),
+      ]),
+      el("td", {}, [
+        el("div", {}, linha.tipo),
+        el("div", { class: "secundaria" }, `${linha.orgao} · ${linha.esfera}`),
+      ]),
+      el("td", {}, [
+        el("span", { class: `pilula ${linha.status}` }, linha.status_rotulo),
+        el("div", { class: "secundaria" }, linha.status === "irregular"
+          ? "há débitos em aberto — reemitir não resolve"
+          : prazoLegivel(linha.dias_restantes)),
+      ]),
+      el("td", {}, [
+        el("div", {}, linha.valida_ate ? dataBR(linha.valida_ate) : "—"),
+        el("div", { class: "secundaria" }, linha.emitida_em ? `emitida ${dataBR(linha.emitida_em)}` : ""),
+      ]),
+      el("td", { class: "acoes" }, acoes),
+    ]);
+  });
+
+  const tabela = el("table", {}, [
+    el("thead", {}, el("tr", {}, ["Titular", "Certidão", "Situação", "Validade", ""].map((t) =>
+      el("th", {}, t)))),
+    el("tbody", {}, corpo),
+  ]);
+  $("#tabela-painel").replaceChildren(tabela);
+}
+
+async function emitir(linha, botao) {
+  if (botao) { botao.disabled = true; botao.textContent = "Enviando..."; }
+  try {
+    await api("/api/solicitacoes", {
+      method: "POST",
+      body: JSON.stringify({ titular_id: linha.titular_id, tipo_id: linha.tipo_id }),
+    });
+    avisar(`${linha.sigla} de ${linha.titular} entrou na fila.`, "bom");
+    await carregar();
+  } finally {
+    if (botao) botao.disabled = false;
+  }
+}
+
+/* --------------------------------------------------------------- titulares */
+function desenharTitulares() {
+  if (!estado.titulares.length) {
+    $("#lista-titulares").replaceChildren(
+      el("div", { class: "vazio" }, [
+        el("strong", {}, "Nenhum titular cadastrado"),
+        el("div", {}, "Cadastre a pessoa ou empresa para começar a acompanhar as certidões dela."),
+      ])
+    );
+    return;
+  }
+  const linhas = estado.titulares.map((t) =>
+    el("tr", {}, [
+      el("td", {}, [
+        el("div", { class: "principal" }, t.nome),
+        el("div", { class: "secundaria" }, `${t.documento_formatado} · ${t.tipo === "PF" ? "pessoa física" : "pessoa jurídica"}`),
+      ]),
+      el("td", {}, [t.municipio, t.uf].filter(Boolean).join(" / ") || "—"),
+      el("td", {}, `${t.monitoramentos.length} certidão(ões)`),
+      el("td", { class: "acoes" }, [
+        el("button", { class: "botao secundario miudo", onclick: () => formularioTitular(t) }, "Editar"),
+      ]),
+    ])
+  );
+  $("#lista-titulares").replaceChildren(
+    el("table", {}, [
+      el("thead", {}, el("tr", {}, ["Titular", "Local", "Acompanhando", ""].map((t) => el("th", {}, t)))),
+      el("tbody", {}, linhas),
+    ])
+  );
+}
+
+function formularioTitular(titular = null) {
+  const dados = titular || { monitoramentos: [], tipo: "PJ" };
+  const campo = (rotulo, entrada, dica) =>
+    el("div", { class: "campo" }, [
+      el("label", {}, [rotulo, dica ? el("span", { class: "dica" }, ` — ${dica}`) : null]),
+      entrada,
+    ]);
+
+  const entradaNome = el("input", { type: "text", value: dados.nome || "", placeholder: "Nome completo ou razão social" });
+  const entradaDoc = el("input", { type: "text", value: dados.documento_formatado || "", placeholder: "CPF ou CNPJ" });
+  entradaDoc.addEventListener("input", () => { entradaDoc.value = mascararDocumento(entradaDoc.value); atualizarEscolhas(); });
+  const entradaUf = el("input", { type: "text", value: dados.uf || "", maxlength: "2", placeholder: "SP" });
+  const entradaMunicipio = el("input", { type: "text", value: dados.municipio || "", placeholder: "São Paulo" });
+  const entradaEmail = el("input", { type: "email", value: dados.email || "", placeholder: "para avisos de vencimento" });
+  const entradaDias = el("input", { type: "number", value: "15", min: "1", max: "120" });
+  const entradaRenovar = el("input", { type: "checkbox", checked: "checked" });
+  const caixaEscolhas = el("div", { class: "escolhas" });
+
+  // Mantém a escolha do usuário mesmo quando a lista é redesenhada ao trocar
+  // o documento (as certidões aplicáveis a PF e a PJ não são as mesmas).
+  const selecionados = new Set(dados.monitoramentos || []);
+
+  function atualizarEscolhas() {
+    const digitos = entradaDoc.value.replace(/\D/g, "");
+    const pf = digitos.length > 0 && digitos.length <= 11;
+    const aplicaveis = estado.tipos.filter((t) => t.ativo && (pf ? t.aplica_pf : t.aplica_pj));
+    caixaEscolhas.replaceChildren(
+      ...aplicaveis.map((tipo) => {
+        const marcado = selecionados.has(tipo.id);
+        const detalhes = [
+          tipo.orgao,
+          `validade ${tipo.validade_dias} dias`,
+          tipo.requer_gov_br ? "exige gov.br" : null,
+          tipo.captcha !== "nenhum" ? `captcha: ${tipo.captcha}` : null,
+        ].filter(Boolean).join(" · ");
+        const marca = el("input", {
+          type: "checkbox", value: String(tipo.id), ...(marcado ? { checked: "checked" } : {}),
+        });
+        marca.addEventListener("change", () => {
+          if (marca.checked) selecionados.add(tipo.id);
+          else selecionados.delete(tipo.id);
+        });
+        return el("label", { class: "escolha" }, [
+          marca,
+          el("div", {}, [
+            el("div", { class: "nome" }, tipo.nome),
+            el("div", { class: "detalhe" }, detalhes),
+          ]),
+        ]);
+      })
+    );
+    if (!aplicaveis.length) {
+      caixaEscolhas.replaceChildren(el("div", { class: "detalhe" }, "Digite o CPF ou CNPJ para ver as certidões aplicáveis."));
+    }
+  }
+  atualizarEscolhas();
+
+  const corpo = el("div", {}, [
+    campo("Nome", entradaNome),
+    campo("CPF ou CNPJ", entradaDoc, "define quais certidões se aplicam"),
+    el("div", { class: "linha" }, [campo("UF", entradaUf), campo("Município", entradaMunicipio)]),
+    campo("E-mail", entradaEmail, "opcional"),
+    el("div", { class: "campo" }, [
+      el("label", {}, "Certidões que este titular precisa manter vigentes"),
+      caixaEscolhas,
+    ]),
+    el("div", { class: "linha" }, [
+      campo("Avisar/renovar com quantos dias de antecedência", entradaDias),
+      el("div", { class: "campo" }, [
+        el("label", {}, "Renovação"),
+        el("label", { class: "alternador" }, [entradaRenovar, "renovar automaticamente ao se aproximar do vencimento"]),
+      ]),
+    ]),
+  ]);
+
+  const salvar = el("button", { class: "botao primario" }, "Salvar");
+  salvar.addEventListener("click", async () => {
+    salvar.disabled = true;
+    try {
+      const corpoRequisicao = {
+        nome: entradaNome.value.trim(),
+        documento: entradaDoc.value,
+        uf: entradaUf.value,
+        municipio: entradaMunicipio.value,
+        email: entradaEmail.value,
+        monitoramentos: [...selecionados],
+        dias_antecedencia: Number(entradaDias.value) || 15,
+        renovar_automaticamente: entradaRenovar.checked,
+      };
+      await api(titular ? `/api/titulares/${titular.id}` : "/api/titulares", {
+        method: titular ? "PUT" : "POST",
+        body: JSON.stringify(corpoRequisicao),
+      });
+      fecharModal();
+      avisar("Titular salvo.", "bom");
+      await carregar();
+    } finally {
+      salvar.disabled = false;
+    }
+  });
+
+  abrirModal(titular ? "Editar titular" : "Novo titular", corpo, [
+    el("button", { class: "botao secundario", onclick: fecharModal }, "Cancelar"),
+    salvar,
+  ]);
+}
+
+/* ------------------------------------------------------------ solicitações */
+async function desenharSolicitacoes() {
+  const itens = await api("/api/solicitacoes?limite=60");
+  const emAndamento = itens.filter((s) => !["concluida", "falhou", "cancelada"].includes(s.estado)).length;
+  $("#contador-solicitacoes").textContent = emAndamento || "";
+
+  if (!itens.length) {
+    $("#lista-solicitacoes").replaceChildren(
+      el("div", { class: "vazio" }, [el("strong", {}, "Nada por aqui ainda"),
+        el("div", {}, "As emissões pedidas no painel aparecem nesta lista.")])
+    );
+    return;
+  }
+
+  const linhas = itens.map((item) => {
+    const acoes = [];
+    if (item.estado === "aguardando_anexo") {
+      acoes.push(el("button", { class: "botao primario miudo", onclick: () => formularioAnexo(item) }, "Anexar PDF"));
+    }
+    if (item.estado === "falhou" || item.estado === "cancelada") {
+      acoes.push(el("button", { class: "botao secundario miudo", onclick: () => reenviar(item) }, "Tentar de novo"));
+    }
+    if (["na_fila", "executando", "aguardando_humano", "aguardando_anexo"].includes(item.estado)) {
+      acoes.push(el("button", { class: "botao secundario miudo", onclick: () => cancelar(item) }, "Cancelar"));
+    }
+    acoes.push(el("button", { class: "botao secundario miudo", onclick: () => detalhes(item) }, "Detalhes"));
+
+    return el("tr", {}, [
+      el("td", {}, [
+        el("div", { class: "principal" }, item.titular),
+        el("div", { class: "secundaria" }, item.tipo),
+      ]),
+      el("td", {}, [
+        el("span", { class: `pilula ${classeEstado(item.estado)}` }, ROTULO_ESTADO[item.estado] || item.estado),
+        item.origem === "renovacao" ? el("div", { class: "secundaria" }, "renovação automática") : null,
+      ]),
+      el("td", { class: "secundaria" }, item.mensagem || ""),
+      el("td", { class: "acoes" }, acoes),
+    ]);
+  });
+
+  $("#lista-solicitacoes").replaceChildren(
+    el("table", {}, [
+      el("thead", {}, el("tr", {}, ["Solicitação", "Estado", "Último retorno", ""].map((t) => el("th", {}, t)))),
+      el("tbody", {}, linhas),
+    ])
+  );
+}
+
+const classeEstado = (estadoSolicitacao) => ({
+  concluida: "vigente",
+  falhou: "vencida",
+  cancelada: "ausente",
+  aguardando_humano: "irregular",
+  aguardando_anexo: "vence_em_breve",
+}[estadoSolicitacao] || "andamento");
+
+function detalhes(item) {
+  const registro = (item.registro || [])
+    .map((r) => `${r.em}  ${r.tipo}: ${r.mensagem}`)
+    .join("\n") || "Sem registro de execução.";
+  abrirModal(`${item.tipo} — ${item.titular}`, el("div", {}, [
+    el("p", { class: "apoio" }, `Estado: ${ROTULO_ESTADO[item.estado] || item.estado} · tentativas: ${item.tentativas}`),
+    item.mensagem ? el("p", {}, item.mensagem) : null,
+    el("div", { class: "registro" }, registro),
+    item.diagnostico ? el("p", { class: "apoio", style: "margin-top:12px" }, `Detalhe técnico: ${item.diagnostico}`) : null,
+  ]), [el("button", { class: "botao secundario", onclick: fecharModal }, "Fechar")]);
+}
+
+function formularioAnexo(item) {
+  const entradaArquivo = el("input", { type: "file", accept: "application/pdf" });
+  const entradaEmissao = el("input", { type: "date" });
+  const entradaValidade = el("input", { type: "date" });
+  const corpo = el("div", {}, [
+    el("div", { class: "instrucao" }, item.mensagem || "Anexe o PDF emitido no site do órgão."),
+    el("div", { class: "campo" }, [el("label", {}, "Arquivo PDF"), entradaArquivo]),
+    el("div", { class: "linha" }, [
+      el("div", { class: "campo" }, [el("label", {}, [ "Emitida em ", el("span", { class: "dica" }, "opcional")]), entradaEmissao]),
+      el("div", { class: "campo" }, [el("label", {}, ["Válida até ", el("span", { class: "dica" }, "opcional")]), entradaValidade]),
+    ]),
+    el("p", { class: "apoio" }, "Se as datas ficarem em branco, o sistema tenta lê-las no próprio PDF e, se não achar, usa a validade padrão do tipo."),
+  ]);
+  const enviar = el("button", { class: "botao primario" }, "Anexar");
+  enviar.addEventListener("click", async () => {
+    if (!entradaArquivo.files.length) return avisar("Escolha o arquivo PDF.", "erro");
+    const formulario = new FormData();
+    formulario.append("arquivo", entradaArquivo.files[0]);
+    const parametros = new URLSearchParams();
+    if (entradaEmissao.value) parametros.set("emitida_em", entradaEmissao.value);
+    if (entradaValidade.value) parametros.set("valida_ate", entradaValidade.value);
+    enviar.disabled = true;
+    try {
+      await api(`/api/solicitacoes/${item.id}/anexar?${parametros}`, { method: "POST", body: formulario });
+      fecharModal();
+      avisar("Certidão arquivada.", "bom");
+      await carregar();
+    } finally {
+      enviar.disabled = false;
+    }
+  });
+  abrirModal("Anexar certidão", corpo, [
+    el("button", { class: "botao secundario", onclick: fecharModal }, "Cancelar"), enviar,
+  ]);
+}
+
+async function reenviar(item) {
+  await api(`/api/solicitacoes/${item.id}/reenviar`, { method: "POST" });
+  avisar("Solicitação reenviada.", "bom");
+  await carregar();
+}
+
+async function cancelar(item) {
+  await api(`/api/solicitacoes/${item.id}/cancelar`, { method: "POST" });
+  avisar("Solicitação cancelada.");
+  await carregar();
+}
+
+/* -------------------------------------------------------------------- acervo */
+async function desenharAcervo() {
+  const incluir = $("#incluir-substituidas").checked;
+  const itens = await api(`/api/certidoes?incluir_substituidas=${incluir}`);
+  if (!itens.length) {
+    $("#lista-acervo").replaceChildren(
+      el("div", { class: "vazio" }, [el("strong", {}, "Nenhum documento arquivado ainda")])
+    );
+    return;
+  }
+  const linhas = itens.map((c) =>
+    el("tr", {}, [
+      el("td", {}, [
+        el("div", { class: "principal" }, c.titular),
+        el("div", { class: "secundaria" }, c.tipo),
+      ]),
+      el("td", {}, [
+        el("div", {}, `${dataBR(c.emitida_em)} → ${dataBR(c.valida_ate)}`),
+        el("div", { class: "secundaria" }, c.numero || ""),
+      ]),
+      el("td", {}, [
+        el("span", { class: "etiqueta" }, c.situacao.replaceAll("_", " ")),
+        c.substituida ? el("span", { class: "etiqueta" }, "substituída") : null,
+        c.origem === "upload" ? el("span", { class: "etiqueta" }, "anexada") : null,
+      ]),
+      el("td", { class: "acoes" }, c.tem_arquivo
+        ? el("a", { class: "botao secundario miudo", href: `/api/certidoes/${c.id}/arquivo`, target: "_blank", style: "text-decoration:none" }, "Abrir PDF")
+        : el("span", { class: "secundaria" }, "sem arquivo")),
+    ])
+  );
+  $("#lista-acervo").replaceChildren(
+    el("table", {}, [
+      el("thead", {}, el("tr", {}, ["Documento", "Vigência", "Situação", ""].map((t) => el("th", {}, t)))),
+      el("tbody", {}, linhas),
+    ])
+  );
+}
+
+/* ------------------------------------------------------------------ catálogo */
+function desenharCatalogo() {
+  const linhas = estado.tipos.map((tipo) => {
+    const marcas = [
+      el("span", { class: "etiqueta" }, tipo.esfera),
+      tipo.requer_gov_br ? el("span", { class: "etiqueta" }, "gov.br") : null,
+      tipo.captcha !== "nenhum" ? el("span", { class: "etiqueta" }, `captcha ${tipo.captcha}`) : null,
+      el("span", { class: "etiqueta" }, tipo.modo),
+      tipo.verificado_em
+        ? el("span", { class: "etiqueta" }, `receita conferida em ${dataBR(tipo.verificado_em)}`)
+        : el("span", { class: "etiqueta" }, "receita não conferida"),
+    ].filter(Boolean);
+    return el("tr", {}, [
+      el("td", {}, [
+        el("div", { class: "principal" }, tipo.nome),
+        el("div", { class: "secundaria" }, tipo.orgao),
+        el("div", { style: "margin-top:4px" }, marcas),
+      ]),
+      el("td", {}, `${tipo.validade_dias} dias`),
+      el("td", { class: "secundaria", style: "max-width:320px" }, tipo.observacoes || ""),
+      el("td", { class: "acoes" }, el("button", {
+        class: "botao secundario miudo", onclick: () => formularioTipo(tipo),
+      }, "Ajustar")),
+    ]);
+  });
+  $("#lista-catalogo").replaceChildren(
+    el("table", {}, [
+      el("thead", {}, el("tr", {}, ["Certidão", "Validade padrão", "Observações", ""].map((t) => el("th", {}, t)))),
+      el("tbody", {}, linhas),
+    ])
+  );
+}
+
+function formularioTipo(tipo) {
+  const entradaUrl = el("input", { type: "text", value: tipo.url || "", placeholder: "https://..." });
+  const entradaValidade = el("input", { type: "number", value: String(tipo.validade_dias), min: "1" });
+  const corpo = el("div", {}, [
+    el("div", { class: "campo" }, [
+      el("label", {}, ["Endereço de emissão ", el("span", { class: "dica" }, "o site que o sistema abre")]),
+      entradaUrl,
+    ]),
+    el("div", { class: "campo" }, [
+      el("label", {}, ["Validade padrão (dias) ",
+        el("span", { class: "dica" }, "usada quando o PDF não informa a data")]),
+      entradaValidade,
+    ]),
+    tipo.observacoes ? el("p", { class: "apoio" }, tipo.observacoes) : null,
+  ]);
+  const salvar = el("button", { class: "botao primario" }, "Salvar");
+  salvar.addEventListener("click", async () => {
+    await api(`/api/tipos/${tipo.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ url: entradaUrl.value, validade_dias: Number(entradaValidade.value) }),
+    });
+    fecharModal();
+    avisar("Catálogo atualizado.", "bom");
+    await carregar();
+  });
+  abrirModal(tipo.nome, corpo, [
+    el("button", { class: "botao secundario", onclick: fecharModal }, "Cancelar"), salvar,
+  ]);
+}
+
+/* ------------------------------------------------------ pedidos de ajuda */
+async function verificarDesafios() {
+  let abertos = [];
+  try {
+    abertos = await fetch("/api/desafios").then((r) => (r.ok ? r.json() : []));
+  } catch {
+    return;
+  }
+  const desafio = abertos.find((d) => !estado.desafiosAdiados.has(d.id));
+  const idsAbertos = new Set(abertos.map((d) => d.id));
+  for (const id of estado.desafiosAdiados) {
+    if (!idsAbertos.has(id)) estado.desafiosAdiados.delete(id);
+  }
+
+  if (!desafio) {
+    if (estado.desafioAtual) {
+      estado.desafioAtual = null;
+      $("#cortina-desafio").classList.add("oculto");
+      carregar();
+    }
+    return;
+  }
+  if (estado.desafioAtual?.id === desafio.id) return;
+
+  estado.desafioAtual = desafio;
+  const ehCaptcha = desafio.tipo === "captcha_imagem";
+  const entrada = el("input", { type: "text", placeholder: "Digite aqui", autocomplete: "off" });
+  entrada.addEventListener("keydown", (e) => { if (e.key === "Enter") $("#desafio-enviar").click(); });
+
+  $("#desafio-titulo").textContent = ehCaptcha ? "Digite o captcha" : "O sistema precisa de você";
+  $("#desafio-corpo").replaceChildren(el("div", {}, [
+    el("p", { class: "apoio" }, `${desafio.certidao} — ${desafio.titular}`),
+    el("div", { class: "instrucao" }, desafio.instrucao),
+    desafio.imagem ? el("div", { class: "captcha-caixa" }, el("img", { src: desafio.imagem, alt: "Imagem do captcha" })) : null,
+    ehCaptcha ? entrada : null,
+  ]));
+  $("#desafio-enviar").textContent = ehCaptcha ? "Enviar" : "Concluí, pode continuar";
+  $("#cortina-desafio").classList.remove("oculto");
+  setTimeout(() => entrada.focus(), 50);
+
+  $("#desafio-enviar").onclick = async () => {
+    const resposta = ehCaptcha ? entrada.value.trim() : "ok";
+    if (ehCaptcha && !resposta) return avisar("Digite os caracteres da imagem.", "erro");
+    $("#desafio-enviar").disabled = true;
+    try {
+      await api(`/api/desafios/${desafio.id}/responder`, {
+        method: "POST", body: JSON.stringify({ resposta }),
+      });
+      $("#cortina-desafio").classList.add("oculto");
+      estado.desafioAtual = null;
+    } finally {
+      $("#desafio-enviar").disabled = false;
+    }
+  };
+  $("#desafio-adiar").onclick = () => {
+    // A automação continua esperando; a pessoa só volta a este pedido quando puder.
+    estado.desafiosAdiados.add(desafio.id);
+    $("#cortina-desafio").classList.add("oculto");
+    estado.desafioAtual = null;
+    avisar("Pedido adiado. Ele continua aberto na aba Solicitações.");
+  };
+  $("#desafio-cancelar").onclick = async () => {
+    await api(`/api/solicitacoes/${desafio.solicitacao_id}/cancelar`, { method: "POST" });
+    $("#cortina-desafio").classList.add("oculto");
+    estado.desafioAtual = null;
+    await carregar();
+  };
+}
+
+/* -------------------------------------------------------------- navegação */
+const TITULOS = {
+  painel: ["Painel", "O que está vigente, o que vence e o que falta emitir."],
+  titulares: ["Titulares", "Pessoas e empresas acompanhadas pelo escritório."],
+  solicitacoes: ["Solicitações", "A fila de emissões e o histórico de tentativas."],
+  acervo: ["Acervo", "Todos os documentos arquivados, com o PDF original."],
+  catalogo: ["Catálogo", "Como cada certidão é obtida e por quanto tempo vale."],
+};
+
+function irPara(pagina) {
+  estado.pagina = pagina;
+  location.hash = pagina;
+  for (const secao of document.querySelectorAll(".pagina")) secao.classList.add("oculto");
+  $(`#pagina-${pagina}`).classList.remove("oculto");
+  for (const link of document.querySelectorAll("#navegacao a")) {
+    link.classList.toggle("ativo", link.dataset.pagina === pagina);
+  }
+  const [titulo, subtitulo] = TITULOS[pagina];
+  $("#titulo-pagina").textContent = titulo;
+  $("#subtitulo-pagina").textContent = subtitulo;
+  $("#botao-emitir-pendentes").classList.toggle("oculto", pagina !== "painel");
+  if (pagina === "solicitacoes") desenharSolicitacoes();
+  if (pagina === "acervo") desenharAcervo();
+}
+
+/* ------------------------------------------------------------------ carga */
+async function carregar() {
+  const [resumo, painel, titulares, tipos] = await Promise.all([
+    api("/api/resumo"), api("/api/painel"), api("/api/titulares"), api("/api/tipos"),
+  ]);
+  Object.assign(estado, { resumo, painel, titulares, tipos });
+  desenharCartoes();
+  desenharPainel();
+  desenharTitulares();
+  desenharCatalogo();
+  desenharSolicitacoes();  // também atualiza o contador da barra lateral
+  if (estado.pagina === "acervo") desenharAcervo();
+
+  const aviso = $("#aviso-modo");
+  aviso.classList.toggle("oculto", !resumo.modo_demonstracao);
+  if (resumo.modo_demonstracao) {
+    aviso.textContent = "Modo demonstração: os documentos gerados são fictícios e não têm valor legal.";
+  }
+}
+
+function ajuda() {
+  abrirModal("Como funciona", el("div", {}, [
+    el("p", {}, "1. Cadastre o titular (pessoa ou empresa) e marque quais certidões ele precisa manter vigentes."),
+    el("p", {}, "2. O painel mostra o que está vigente, o que vence em breve e o que falta. O sistema renova sozinho quando o vencimento se aproxima."),
+    el("p", {}, "3. Quando o site do órgão pedir um captcha ou o login gov.br, a tela avisa e mostra o que fazer — quem responde é você, o sistema só conduz o resto."),
+    el("p", {}, "4. Onde não há automação, o sistema abre o site certo e arquiva o PDF que você anexar, mantendo o controle de validade igual."),
+    el("p", { class: "apoio" }, "Os PDFs ficam na pasta de documentos do sistema, organizados por titular e ano — dá para consultar mesmo sem abrir o programa."),
+  ]), [el("button", { class: "botao secundario", onclick: fecharModal }, "Fechar")]);
+}
+
+/* -------------------------------------------------------------------- início */
+document.addEventListener("DOMContentLoaded", () => {
+  for (const link of document.querySelectorAll("#navegacao a")) {
+    link.addEventListener("click", (e) => { e.preventDefault(); irPara(link.dataset.pagina); });
+  }
+  $("#modal-fechar").addEventListener("click", fecharModal);
+  $("#cortina").addEventListener("click", (e) => { if (e.target.id === "cortina") fecharModal(); });
+  $("#botao-atualizar").addEventListener("click", () => carregar().then(() => avisar("Atualizado.")));
+  $("#botao-novo-titular").addEventListener("click", () => formularioTitular());
+  $("#botao-ajuda").addEventListener("click", ajuda);
+  $("#incluir-substituidas").addEventListener("change", desenharAcervo);
+  $("#botao-emitir-pendentes").addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    try {
+      const r = await api("/api/solicitacoes/pendentes", { method: "POST" });
+      avisar(r.criadas ? `${r.criadas} emissão(ões) na fila.` : "Nada pendente no momento.", r.criadas ? "bom" : "");
+      await carregar();
+    } finally { e.target.disabled = false; }
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") fecharModal(); });
+
+  irPara(location.hash.slice(1) || "painel");
+  carregar();
+  setInterval(verificarDesafios, 2500);
+  setInterval(() => { if (!$("#cortina").classList.contains("oculto")) return; carregar(); }, 15000);
+});

@@ -1,0 +1,29 @@
+codigo: fgts_crf
+nome: CRF/FGTS — Caixa Econômica Federal
+url: https://consulta-crf.caixa.gov.br/consultacrf/pages/consultaEmpregador.jsf
+resultado: pagina_pdf
+verificado_em: 2026-08-27
+passos:
+  - acao: abrir
+    url: "{url}"
+  - acao: selecionar
+    seletor: "[id='mainForm:tipoEstabelecimento']"
+    valor: "{fgts_tipo_inscricao}"   # 1 = CNPJ, 3 = CPF
+  - acao: preencher
+    seletor: "[id='mainForm:txtInscricao1']"
+    valor: "{documento}"
+  - acao: selecionar
+    seletor: "[id='mainForm:uf']"
+    valor: "{uf}"
+  - acao: clicar
+    seletor: "[id='mainForm:btnConsultar']"
+  - acao: esperar
+    ms: 2500
+  - acao: exigir_texto
+    alternativas:
+      - "Regularidade"
+      - "CRF"
+    mensagem: >-
+      A Caixa não apresentou o certificado. Em geral isso indica pendência de FGTS
+      do empregador — confira a mensagem na tela do navegador.
+  - acao: salvar_pagina_pdf

@@ -1,0 +1,29 @@
+codigo: cndt
+nome: CNDT — Tribunal Superior do Trabalho
+url: https://cndt-certidao.tst.jus.br/inicio.faces
+resultado: download
+verificado_em: 2026-08-27
+passos:
+  - acao: abrir
+    url: "{url}"
+  - acao: clicar
+    seletor: "input[value='Emitir Certidão']"
+  - acao: esperar
+    seletor: "[id='gerarCertidaoForm:cpfCnpj']"
+  - acao: preencher
+    seletor: "[id='gerarCertidaoForm:cpfCnpj']"
+    valor: "{documento_formatado}"
+  - acao: captcha_imagem
+    seletor: "#idImgBase64"
+    campo: "#idCampoResposta"
+    instrucao: Digite os caracteres da imagem exibida pelo site do TST.
+  - acao: clicar
+    seletor: "[id='gerarCertidaoForm:btnEmitirCertidao']"
+  - acao: aguardar_download
+    timeout: 90
+    falhar_se_texto:
+      - texto: "caracteres digitados não conferem"
+        mensagem: Captcha incorreto. O sistema vai pedir a imagem de novo.
+        repetir: true
+      - texto: "não foi possível emitir"
+        mensagem: O TST não conseguiu emitir a certidão neste momento.

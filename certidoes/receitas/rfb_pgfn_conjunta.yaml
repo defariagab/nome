@@ -1,0 +1,14 @@
+codigo: rfb_pgfn_conjunta
+nome: CND Federal — Receita Federal / PGFN
+# ATENÇÃO: endereço e seletores ainda NÃO conferidos contra o site (sem
+# `verificado_em`). Enquanto não forem, o sistema executa esta receita em modo
+# assistido: abre o site e pede que o usuário conclua e anexe o PDF.
+url: https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/certidoes-e-situacao-fiscal
+resultado: anexo_manual
+passos:
+  - acao: abrir
+    url: "{url}"
+  - acao: acao_manual
+    instrucao: >-
+      Conclua a emissão da CND Federal no navegador que foi aberto e salve o PDF.
+      Depois volte aqui e anexe o arquivo para o sistema arquivar e controlar a validade.

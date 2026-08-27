@@ -1,0 +1,11 @@
+codigo: jf_distribuicao
+nome: Certidão de Distribuição da Justiça Federal
+url: "{url_tribunal}"
+resultado: anexo_manual
+passos:
+  - acao: abrir
+    url: "{url_tribunal}"
+  - acao: acao_manual
+    instrucao: >-
+      Emita a certidão de distribuição no site do TRF da sua Região e salve o PDF.
+      Anexe o arquivo aqui para o sistema arquivar e controlar o vencimento.

@@ -1,0 +1,128 @@
+"""Testes da API — o mesmo caminho que a tela usa."""
+
+import pytest
+from fastapi.testclient import TestClient
+
+from certidoes.api.app import app
+
+
+@pytest.fixture
+def cliente(monkeypatch):
+    # a fila e a renovação periódica são exercitadas em test_fila.py
+    monkeypatch.setattr("certidoes.fila.fila.iniciar", lambda: None)
+
+    async def _sem_agenda(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("certidoes.agenda.rodar_periodicamente", _sem_agenda)
+    with TestClient(app) as c:
+        yield c
+
+
+def criar_titular(cliente, **extras):
+    corpo = {"nome": "Empresa Exemplo Ltda", "documento": "11.222.333/0001-81", "uf": "SP", **extras}
+    return cliente.post("/api/titulares", json=corpo)
+
+
+def test_catalogo_disponivel(cliente):
+    tipos = cliente.get("/api/tipos").json()
+    codigos = {t["codigo"] for t in tipos}
+    assert {"cndt", "fgts_crf", "rfb_pgfn_conjunta"} <= codigos
+    cndt = next(t for t in tipos if t["codigo"] == "cndt")
+    assert cndt["captcha"] == "imagem"
+    assert cndt["validade_dias"] == 180
+
+
+def test_cadastro_e_painel(cliente):
+    tipos = cliente.get("/api/tipos").json()
+    cndt = next(t for t in tipos if t["codigo"] == "cndt")
+
+    resposta = criar_titular(cliente, monitoramentos=[cndt["id"]])
+    assert resposta.status_code == 200
+    assert resposta.json()["documento_formatado"] == "11.222.333/0001-81"
+
+    painel = cliente.get("/api/painel").json()
+    assert len(painel) == 1
+    assert painel[0]["status"] == "ausente"
+
+    resumo = cliente.get("/api/resumo").json()
+    assert resumo["titulares"] == 1
+    assert resumo["pendencias"] == 1
+
+
+def test_documento_invalido_devolve_mensagem_util(cliente):
+    resposta = cliente.post("/api/titulares", json={"nome": "X", "documento": "123"})
+    assert resposta.status_code == 400
+    assert "inválido" in resposta.json()["erro"]
+
+
+def test_emitir_pendentes_enfileira_tudo(cliente):
+    tipos = cliente.get("/api/tipos").json()
+    escolhidos = [t["id"] for t in tipos if t["codigo"] in {"cndt", "fgts_crf"}]
+    criar_titular(cliente, monitoramentos=escolhidos)
+
+    resultado = cliente.post("/api/solicitacoes/pendentes").json()
+    assert resultado["criadas"] == 2
+
+    # chamar de novo não duplica o que já está na fila
+    assert cliente.post("/api/solicitacoes/pendentes").json()["criadas"] == 0
+
+    solicitacoes = cliente.get("/api/solicitacoes").json()
+    assert {s["estado"] for s in solicitacoes} == {"na_fila"}
+
+
+def test_anexar_pdf_arquiva_e_conclui(cliente):
+    from certidoes.automacao.pdf_simples import gerar
+
+    tipos = cliente.get("/api/tipos").json()
+    cndt = next(t for t in tipos if t["codigo"] == "cndt")
+    titular = criar_titular(cliente, monitoramentos=[cndt["id"]]).json()
+    solicitacao = cliente.post(
+        "/api/solicitacoes", json={"titular_id": titular["id"], "tipo_id": cndt["id"]}
+    ).json()
+
+    pdf = gerar(["Certidao n. 77/2026", "Validade: 15/12/2026", "CERTIDAO NEGATIVA"], "CNDT")
+    resposta = cliente.post(
+        f"/api/solicitacoes/{solicitacao['id']}/anexar",
+        files={"arquivo": ("certidao.pdf", pdf, "application/pdf")},
+    )
+    assert resposta.status_code == 200
+    assert resposta.json()["valida_ate"] == "2026-12-15"
+
+    painel = cliente.get("/api/painel").json()
+    assert painel[0]["status"] in {"vigente", "vence_em_breve", "vencida"}
+    assert painel[0]["tem_arquivo"]
+
+    certidao_id = painel[0]["certidao_id"]
+    arquivo = cliente.get(f"/api/certidoes/{certidao_id}/arquivo")
+    assert arquivo.status_code == 200
+    assert arquivo.content.startswith(b"%PDF")
+
+
+def test_cancelar_solicitacao(cliente):
+    tipos = cliente.get("/api/tipos").json()
+    cndt = next(t for t in tipos if t["codigo"] == "cndt")
+    titular = criar_titular(cliente, monitoramentos=[cndt["id"]]).json()
+    solicitacao = cliente.post(
+        "/api/solicitacoes", json={"titular_id": titular["id"], "tipo_id": cndt["id"]}
+    ).json()
+
+    assert cliente.post(f"/api/solicitacoes/{solicitacao['id']}/cancelar").status_code == 200
+    assert cliente.post(f"/api/solicitacoes/{solicitacao['id']}/cancelar").status_code == 400
+
+
+def test_ajuste_de_tipo_persiste(cliente):
+    tipos = cliente.get("/api/tipos").json()
+    municipal = next(t for t in tipos if t["codigo"] == "municipal_tributos")
+    resposta = cliente.put(
+        f"/api/tipos/{municipal['id']}",
+        json={"url": "https://prefeitura.exemplo.gov.br/cnd", "validade_dias": 60},
+    )
+    assert resposta.json()["url"] == "https://prefeitura.exemplo.gov.br/cnd"
+    assert resposta.json()["validade_dias"] == 60
+
+
+def test_painel_web_responde(cliente):
+    assert cliente.get("/").status_code == 200
+    assert cliente.get("/web/app.js").status_code == 200
+    assert cliente.get("/api/saude").json()["ok"] is True

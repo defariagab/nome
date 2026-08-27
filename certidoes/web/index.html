@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certidões — gestão e emissão</title>
+<link rel="stylesheet" href="/web/estilo.css">
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca">
+      <div class="marca-selo">C</div>
+      <div>
+        <strong>Certidões</strong>
+        <span>gestão e emissão</span>
+      </div>
+    </div>
+    <nav id="navegacao">
+      <a href="#painel" data-pagina="painel"><span class="ico">▤</span> Painel</a>
+      <a href="#titulares" data-pagina="titulares"><span class="ico">☰</span> Titulares</a>
+      <a href="#solicitacoes" data-pagina="solicitacoes"><span class="ico">⟳</span> Solicitações <b id="contador-solicitacoes" class="selo"></b></a>
+      <a href="#acervo" data-pagina="acervo"><span class="ico">▣</span> Acervo</a>
+      <a href="#catalogo" data-pagina="catalogo"><span class="ico">◆</span> Catálogo</a>
+    </nav>
+    <div class="lateral-rodape">
+      <div id="aviso-modo" class="aviso-modo oculto"></div>
+      <button class="botao-texto" id="botao-ajuda">Como funciona</button>
+    </div>
+  </aside>
+
+  <main class="conteudo">
+    <header class="cabecalho">
+      <div>
+        <h1 id="titulo-pagina">Painel</h1>
+        <p id="subtitulo-pagina" class="apoio"></p>
+      </div>
+      <div class="acoes-cabecalho">
+        <button class="botao secundario" id="botao-atualizar">Atualizar</button>
+        <button class="botao primario" id="botao-emitir-pendentes">Emitir todas as pendentes</button>
+      </div>
+    </header>
+
+    <!-- Painel -->
+    <section id="pagina-painel" class="pagina">
+      <div class="cartoes" id="cartoes"></div>
+      <div class="bloco">
+        <div class="bloco-cabecalho">
+          <h2>Situação por titular</h2>
+          <div class="filtros" id="filtros-status"></div>
+        </div>
+        <div id="tabela-painel"></div>
+      </div>
+    </section>
+
+    <!-- Titulares -->
+    <section id="pagina-titulares" class="pagina oculto">
+      <div class="bloco">
+        <div class="bloco-cabecalho">
+          <h2>Titulares</h2>
+          <button class="botao primario" id="botao-novo-titular">Novo titular</button>
+        </div>
+        <div id="lista-titulares"></div>
+      </div>
+    </section>
+
+    <!-- Solicitações -->
+    <section id="pagina-solicitacoes" class="pagina oculto">
+      <div class="bloco">
+        <div class="bloco-cabecalho">
+          <h2>Solicitações</h2>
+          <span class="apoio">O que o sistema está fazendo agora e o que já fez.</span>
+        </div>
+        <div id="lista-solicitacoes"></div>
+      </div>
+    </section>
+
+    <!-- Acervo -->
+    <section id="pagina-acervo" class="pagina oculto">
+      <div class="bloco">
+        <div class="bloco-cabecalho">
+          <h2>Acervo de certidões</h2>
+          <label class="alternador"><input type="checkbox" id="incluir-substituidas"> mostrar versões anteriores</label>
+        </div>
+        <div id="lista-acervo"></div>
+      </div>
+    </section>
+
+    <!-- Catálogo -->
+    <section id="pagina-catalogo" class="pagina oculto">
+      <div class="bloco">
+        <div class="bloco-cabecalho">
+          <h2>Catálogo de certidões</h2>
+          <span class="apoio">Onde cada certidão é emitida, o que ela exige e quanto tempo vale.</span>
+        </div>
+        <div id="lista-catalogo"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Modal genérico -->
+<div class="cortina oculto" id="cortina">
+  <div class="modal" id="modal">
+    <div class="modal-cabecalho">
+      <h3 id="modal-titulo"></h3>
+      <button class="fechar" id="modal-fechar" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-corpo" id="modal-corpo"></div>
+    <div class="modal-rodape" id="modal-rodape"></div>
+  </div>
+</div>
+
+<!-- Pedido de ajuda (captcha / login / ação manual) -->
+<div class="cortina oculto" id="cortina-desafio">
+  <div class="modal desafio">
+    <div class="modal-cabecalho">
+      <h3 id="desafio-titulo">O sistema precisa de você</h3>
+    </div>
+    <div class="modal-corpo" id="desafio-corpo"></div>
+    <div class="modal-rodape">
+      <button class="botao secundario" id="desafio-cancelar">Cancelar solicitação</button>
+      <button class="botao secundario" id="desafio-adiar">Agora não</button>
+      <button class="botao primario" id="desafio-enviar">Enviar</button>
+    </div>
+  </div>
+</div>
+
+<div id="avisos" class="avisos"></div>
+<script src="/web/app.js"></script>
+</body>
+</html>
