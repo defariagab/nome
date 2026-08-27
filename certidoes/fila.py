@@ -19,12 +19,11 @@ from .automacao.receitas import carregar_receita
 from .automacao.tipos import Contexto, ErroAutomacao, Passo, Receita
 from .banco import sessao
 from .config import config
-from .modelos import EstadoSolicitacao, ModoObtencao, Solicitacao, TipoCertidao, Titular, agora
+from .modelos import EstadoSolicitacao, Solicitacao, TipoCertidao, Titular, agora
 
 log = logging.getLogger("certidoes.fila")
 
 INTERVALO = 2.0
-LIMITE_SIMULTANEO = 2
 
 
 def _receita_para(tipo: TipoCertidao) -> Receita:
@@ -67,9 +66,19 @@ def _anotar(solicitacao_id: int, tipo: str, mensagem: str) -> None:
 
 
 class Fila:
-    def __init__(self, motor: str | None = None, limite: int = LIMITE_SIMULTANEO):
+    """Executa as solicitações, várias ao mesmo tempo quando isso ajuda.
+
+    Emissões com captcha de letras rodam em paralelo de propósito: assim as
+    imagens chegam à sala de captchas em sequência e a pessoa responde uma
+    atrás da outra, sem esperar o carregamento de cada site. Já o que exige
+    janela do navegador (widget interativo, login gov.br, ação manual) roda
+    sozinho — não dá para pedir que alguém opere quatro janelas de uma vez.
+    """
+
+    def __init__(self, motor: str | None = None, limite: int | None = None):
         self.motor = motor
-        self.limite = limite
+        self.limite = limite or config.paralelismo
+        self._exclusivas: set[int] = set()
         self._tarefas: dict[int, asyncio.Task] = {}
         self._laco: asyncio.Task | None = None
         self._parar = asyncio.Event()
@@ -105,21 +114,59 @@ class Fila:
         for solicitacao_id, tarefa in list(self._tarefas.items()):
             if tarefa.done():
                 self._tarefas.pop(solicitacao_id, None)
+                self._exclusivas.discard(solicitacao_id)
                 if (erro := tarefa.exception()) and not isinstance(erro, asyncio.CancelledError):
                     log.exception("Solicitação %s terminou com erro", solicitacao_id, exc_info=erro)
 
-    def _proximas(self, quantidade: int) -> list[int]:
+    def _ocupando_a_janela(self) -> bool:
+        """Há emissão dirigindo o navegador agora?
+
+        Enquanto ela apenas espera uma resposta da pessoa, as emissões de
+        captcha de letras podem seguir: elas não disputam a janela, e travar a
+        fila por causa de um pedido adiado deixaria tudo parado.
+        """
+        if not self._exclusivas:
+            return False
         with sessao() as s:
-            consulta = (
-                select(Solicitacao.id)
+            return any(
+                (solicitacao := s.get(Solicitacao, id_)) is not None
+                and solicitacao.estado is EstadoSolicitacao.EXECUTANDO
+                for id_ in self._exclusivas
+            )
+
+    def _proximas(self, quantidade: int) -> list[int]:
+        """Escolhe o que pode começar agora, respeitando quem precisa da janela."""
+        if self._ocupando_a_janela():
+            return []
+        escolhidas: list[int] = []
+        with sessao() as s:
+            for solicitacao in s.scalars(
+                select(Solicitacao)
                 .where(
                     Solicitacao.estado == EstadoSolicitacao.NA_FILA,
                     Solicitacao.agendada_para <= agora(),
                 )
                 .order_by(Solicitacao.agendada_para, Solicitacao.id)
-                .limit(quantidade)
-            )
-            return [i for i in s.scalars(consulta) if i not in self._tarefas]
+                .limit(quantidade * 4)
+            ):
+                if len(escolhidas) >= quantidade:
+                    break
+                if solicitacao.id in self._tarefas:
+                    continue
+                receita = _receita_para(s.get(TipoCertidao, solicitacao.tipo_certidao_id))
+                if receita.paralelizavel:
+                    escolhidas.append(solicitacao.id)
+                    continue
+                # Exclusiva: começa sozinha, e só com a fila vazia.
+                if not escolhidas and not self._tarefas and not self._exclusivas:
+                    self._exclusivas.add(solicitacao.id)
+                    escolhidas.append(solicitacao.id)
+                    break
+                # Não pode começar agora: em vez de segurar a fila, deixa passar
+                # o que roda sem ajuda. Primeiro o automático, depois o que
+                # precisa de gente.
+                continue
+        return escolhidas
 
     # -------------------------------------------------------------- execução
     async def _processar(self, solicitacao_id: int) -> None:
@@ -134,7 +181,6 @@ class Fila:
             solicitacao.tentativas += 1
             variaveis = servicos.variaveis_do_contexto(titular, tipo)
             nome_tipo, tipo_id = tipo.nome, tipo.id
-            modo = tipo.modo
 
         _anotar(solicitacao_id, "inicio", f"Iniciando {nome_tipo}.")
 
@@ -156,7 +202,9 @@ class Fila:
             variaveis=variaveis,
             perguntar=perguntar,
             registrar=lambda t, m: _anotar(solicitacao_id, t, m),
-            pasta_sessao=str(config.pasta_sessoes / variaveis["documento"]) if modo is ModoObtencao.ASSISTIDO else None,
+            # O perfil guarda cookies e login: quem entra no gov.br uma vez
+            # segue emitindo sem repetir a autenticação.
+            pasta_sessao=str(config.pasta_sessoes / receita.perfil) if receita.perfil else None,
             visivel=config.navegador_visivel,
         )
 

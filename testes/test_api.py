@@ -126,3 +126,35 @@ def test_painel_web_responde(cliente):
     assert cliente.get("/").status_code == 200
     assert cliente.get("/web/app.js").status_code == 200
     assert cliente.get("/api/saude").json()["ok"] is True
+
+
+def test_preferencia_de_nome_de_arquivo(cliente):
+    padrao = cliente.get("/api/preferencias").json()
+    assert padrao["exemplo"].endswith(".pdf")
+    assert "sigla" in padrao["campos"]
+
+    salvo = cliente.put(
+        "/api/preferencias", json={"padrao_nome_arquivo": "{documento}_{sigla}_{validade}"}
+    ).json()
+    assert salvo["exemplo"] == "11222333000181_CNDT_2027-02-22.pdf"
+    assert cliente.get("/api/preferencias").json()["padrao_nome_arquivo"] == "{documento}_{sigla}_{validade}"
+
+
+def test_modelo_de_nome_invalido_explica_o_motivo(cliente):
+    resposta = cliente.put("/api/preferencias", json={"padrao_nome_arquivo": "{sigla}"})
+    assert resposta.status_code == 400
+    assert "{nome} ou {documento}" in resposta.json()["erro"]
+
+
+def test_inspecao_exige_endereco_completo(cliente):
+    resposta = cliente.post("/api/inspecionar", json={"url": "receita.fazenda.gov.br"})
+    assert resposta.status_code == 400
+    assert "https://" in resposta.json()["erro"]
+
+
+def test_catalogo_traz_os_portais_novos(cliente):
+    tipos = {t["codigo"]: t for t in cliente.get("/api/tipos").json()}
+    assert tipos["rfb_pgfn_conjunta"]["captcha"] == "hcaptcha"
+    assert "servicos.receitafederal.gov.br" in tipos["rfb_pgfn_conjunta"]["url"]
+    assert "certidao-unificada.cjf.jus.br" in tipos["jf_certidao_unificada"]["url"]
+    assert "TRF6" in tipos["jf_certidao_unificada"]["observacoes"]

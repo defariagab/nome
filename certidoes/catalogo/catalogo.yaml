@@ -12,13 +12,14 @@
   esfera: federal
   validade_dias: 180
   requer_gov_br: false
-  captcha: desconhecido
+  captcha: hcaptcha
   modo: assistido
   receita: rfb_pgfn_conjunta
-  url: https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/certidoes-e-situacao-fiscal
+  url: https://servicos.receitafederal.gov.br/servico/certidoes/#/home
   observacoes: >-
-    Emitida em conjunto por RFB e PGFN, para PF e PJ. O endereço direto de emissão
-    muda com frequência: confira a URL no portal antes de usar em produção.
+    Emitida em conjunto por RFB e PGFN, para PF e PJ. O portal é protegido por
+    hCaptcha: o widget é resolvido pela pessoa na janela do navegador e o resto
+    da emissão é automático. Seletores ainda não conferidos.
 
 - codigo: cndt
   nome: Certidão Negativa de Débitos Trabalhistas
@@ -52,20 +53,21 @@
     Consulta por CNPJ ou CPF do empregador, com a UF do estabelecimento. Quando o empregador está irregular
     o sistema não emite o certificado e informa a pendência.
 
-- codigo: jf_distribuicao
-  nome: Certidão de Distribuição da Justiça Federal (cível e criminal)
+- codigo: jf_certidao_unificada
+  nome: Certidão Unificada da Justiça Federal (cível, criminal e eleitoral)
   sigla: Certidão JF
-  orgao: Tribunal Regional Federal
+  orgao: Conselho da Justiça Federal
   esfera: federal
   validade_dias: 30
   captcha: desconhecido
   modo: assistido
-  receita: jf_distribuicao
-  url: https://www.cjf.jus.br/cjf/certidao-negativa
+  receita: jf_certidao_unificada
+  url: https://certidao-unificada.cjf.jus.br/#/solicitacao-certidao
   observacoes: >-
-    O endereço muda conforme a Região (TRF1 a TRF6) do domicílio do titular.
-    Alguns tribunais bloqueiam acesso automatizado — nesses casos o sistema abre
-    o site para o usuário concluir e anexar o PDF.
+    Uma única certidão para as Regiões da Justiça Federal, EXCETO o TRF6, que
+    permanece fora do sistema unificado por tempo indeterminado — para a 6ª
+    Região, emita à parte no site do próprio tribunal. Seletores ainda não
+    conferidos.
 
 - codigo: tj_distribuicao_civel
   nome: Certidão de Distribuição Cível da Justiça Estadual

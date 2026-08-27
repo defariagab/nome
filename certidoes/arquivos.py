@@ -25,23 +25,31 @@ def guardar(
     dados: bytes,
     *,
     documento: str,
-    codigo_tipo: str,
     emitida_em: date,
-    extensao: str = "pdf",
+    nome_arquivo: str,
 ) -> tuple[str, str]:
     """Grava o documento e devolve ``(caminho_relativo, hash)``.
 
     A pasta é organizada por titular e ano para que o acervo continue
     navegável direto pelo explorador de arquivos, sem depender do sistema.
+    O nome do arquivo segue o padrão definido pelo escritório.
     """
     digest = hash_conteudo(dados)
     pasta = config.pasta_documentos / _fatiar(documento) / str(emitida_em.year)
     pasta.mkdir(parents=True, exist_ok=True)
-    nome = f"{emitida_em.isoformat()}_{_fatiar(codigo_tipo)}_{digest[:8]}.{extensao}"
-    destino = pasta / nome
+    destino = _sem_colidir(pasta, nome_arquivo, dados, digest)
     if not destino.exists():
         destino.write_bytes(dados)
     return str(destino.relative_to(config.pasta_documentos)), digest
+
+
+def _sem_colidir(pasta: Path, nome: str, dados: bytes, digest: str) -> Path:
+    """Duas certidões diferentes com o mesmo nome não podem se sobrescrever."""
+    destino = pasta / nome
+    if not destino.exists() or hash_conteudo(destino.read_bytes()) == digest:
+        return destino
+    base, _, extensao = nome.rpartition(".")
+    return pasta / f"{base}_{digest[:8]}.{extensao}"
 
 
 def caminho_absoluto(relativo: str) -> Path:

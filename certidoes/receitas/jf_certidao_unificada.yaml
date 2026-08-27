@@ -1,0 +1,27 @@
+codigo: jf_certidao_unificada
+nome: Certidão Unificada da Justiça Federal — CJF
+url: https://certidao-unificada.cjf.jus.br/#/solicitacao-certidao
+resultado: download
+ao_falhar: pedir_anexo
+# Sem `verificado_em`: o site recusa conexões que não venham de uma rede comum
+# (bloqueio de IP), então os seletores não puderam ser conferidos no ambiente de
+# desenvolvimento — mas serão conferidos na máquina do escritório, que acessa
+# normalmente. Use `python -m certidoes inspecionar <url>` para completá-los.
+# A certidão abrange as Regiões da Justiça Federal, exceto o TRF6, que segue
+# fora do sistema unificado por tempo indeterminado.
+passos:
+  - acao: abrir
+    url: "{url}"
+  - acao: esperar
+    ms: 2500
+  - acao: preencher
+    seletor: "input[formcontrolname='cpfCnpj'], input[name='cpfCnpj'], input[type='text']"
+    valor: "{documento_formatado}"
+  - acao: captcha_interativo
+    instrucao: >-
+      Confirme o captcha na janela do navegador aberta na página do CJF e
+      volte aqui. Lembre-se: a certidão unificada não cobre o TRF6.
+  - acao: clicar
+    seletor: "button[type='submit']"
+  - acao: aguardar_download
+    timeout: 120

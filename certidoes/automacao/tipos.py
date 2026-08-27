@@ -26,10 +26,29 @@ class Receita:
     passos: list[Passo]
     resultado: str = "download"          # download | pagina_pdf | anexo_manual
     verificado_em: date | None = None
+    #: o que fazer quando um passo não encontra o que esperava no site:
+    #: "pedir_anexo" deixa o navegador aberto na página certa e pede que a
+    #: pessoa conclua e anexe o PDF, em vez de simplesmente falhar
+    ao_falhar: str = "falhar"
+    #: perfil de navegador reaproveitado entre emissões (ex.: "govbr"), para
+    #: que o login feito uma vez sirva para as próximas certidões
+    perfil: str | None = None
+    #: captchas de letras podem rodar em paralelo — o usuário responde vários
+    #: seguidos. Widget interativo e sessão logada exigem uma janela por vez.
+    _paralelizavel: bool = True
 
     @property
     def verificada(self) -> bool:
         return self.verificado_em is not None
+
+    @property
+    def paralelizavel(self) -> bool:
+        if self.perfil:
+            return False
+        return self._paralelizavel and not any(
+            passo.acao in {"captcha_interativo", "login_gov_br", "acao_manual"}
+            for passo in self.passos
+        )
 
 
 class PerguntarHumano(Protocol):

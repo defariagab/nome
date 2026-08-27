@@ -8,18 +8,34 @@ from typing import Any, Iterable
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import arquivos
+from . import arquivos, nomeacao
 from .automacao.extracao import analisar
 from .documento import apenas_digitos, formatar, tipo_pessoa, valido
 from .modelos import (  # noqa: F401  (Titular é reexportado para conveniência)
-    Certidao, Desafio, EstadoDesafio, EstadoSolicitacao, Evento, Monitoramento,
-    SituacaoCertidao, Solicitacao, TipoCertidao, TipoPessoa, Titular, agora,
+    Certidao, Configuracao, Desafio, EstadoDesafio, EstadoSolicitacao, Evento,
+    Monitoramento, SituacaoCertidao, Solicitacao, TipoCertidao, TipoPessoa, Titular, agora,
 )
 from .validade import Status, avaliar, calcular_validade
 
 
 class ErroDeUso(ValueError):
     """Erro previsto, com mensagem escrita para o usuário final."""
+
+
+# --------------------------------------------------------------------------- #
+# Preferências do escritório
+# --------------------------------------------------------------------------- #
+
+def preferencia(s: Session, chave: str, padrao: str = "") -> str:
+    registro = s.get(Configuracao, chave)
+    return registro.valor if registro else padrao
+
+
+def definir_preferencia(s: Session, chave: str, valor: str) -> None:
+    if registro := s.get(Configuracao, chave):
+        registro.valor = valor
+    else:
+        s.add(Configuracao(chave=chave, valor=valor))
 
 
 # --------------------------------------------------------------------------- #
@@ -259,8 +275,17 @@ def guardar_resultado(
     emissao = emitida_em or date.today()
     validade = valida_ate or calcular_validade(emissao, tipo.validade_dias)
 
+    nome_arquivo = nomeacao.aplicar(
+        preferencia(s, "padrao_nome_arquivo", nomeacao.PADRAO),
+        nomeacao.campos(
+            sigla=tipo.sigla or tipo.codigo.upper(), codigo=tipo.codigo, certidao=tipo.nome,
+            orgao=tipo.orgao, nome=titular.nome, documento=titular.documento,
+            documento_formatado=formatar(titular.documento),
+            emitida_em=emissao, valida_ate=validade, numero=numero,
+        ),
+    )
     caminho, digest = arquivos.guardar(
-        documento, documento=titular.documento, codigo_tipo=tipo.codigo, emitida_em=emissao
+        documento, documento=titular.documento, emitida_em=emissao, nome_arquivo=nome_arquivo
     )
 
     for anterior in s.scalars(

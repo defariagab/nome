@@ -21,6 +21,9 @@ def _converter(bruto: dict) -> Receita:
         passos=passos,
         resultado=bruto.get("resultado", "download"),
         verificado_em=bruto.get("verificado_em"),
+        perfil=bruto.get("perfil"),
+        ao_falhar=bruto.get("ao_falhar", "falhar"),
+        _paralelizavel=bruto.get("paralelizavel", True),
     )
 
 

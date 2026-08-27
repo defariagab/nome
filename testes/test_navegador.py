@@ -125,3 +125,34 @@ def test_pagina_de_resultado_vira_pdf():
 
     assert resultado.documento.startswith(b"%PDF")
     assert resultado.valida_ate.isoformat() == "2026-09-26"
+
+
+@pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
+def test_site_mudou_o_sistema_pede_o_anexo_em_vez_de_falhar():
+    """Receita desatualizada não pode virar beco sem saída para o usuário."""
+    receita = Receita(
+        codigo="teste", nome="Certidão de teste", url="{url}", resultado="download",
+        ao_falhar="pedir_anexo",
+        passos=[
+            Passo("abrir", {"url": "{url}"}),
+            Passo("preencher", {"seletor": "#campo-que-nao-existe", "valor": "{documento}"}),
+            Passo("aguardar_download", {"timeout": 10}),
+        ],
+    )
+    pedidos = []
+
+    async def perguntar(*, tipo, instrucao, imagem=None, timeout=300):
+        pedidos.append(tipo)
+        return "ok"
+
+    with SiteFalso() as site:
+        contexto = Contexto(
+            solicitacao_id=0,
+            variaveis={"url": site.url, "documento": "11222333000181"},
+            perguntar=perguntar, registrar=lambda t, m: None, visivel=False,
+        )
+        resultado = asyncio.run(executar(receita, contexto, motor="navegador"))
+
+    assert resultado.aguarda_anexo
+    assert resultado.sucesso
+    assert pedidos and pedidos[0].value == "acao_manual"

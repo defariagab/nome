@@ -30,6 +30,9 @@ class Config:
     # Com o navegador visível o usuário acompanha (e socorre) a automação.
     navegador_visivel: bool = os.environ.get("CERTIDOES_NAVEGADOR_VISIVEL", "1") != "0"
     abrir_navegador_ao_iniciar: bool = os.environ.get("CERTIDOES_ABRIR", "1") != "0"
+    #: quantas emissões de captcha de letras rodam ao mesmo tempo — é o que
+    #: permite responder vários captchas em sequência, sem esperar entre eles
+    paralelismo: int = int(os.environ.get("CERTIDOES_PARALELISMO", "4"))
     #: caminho de um Chrome/Chromium já instalado (opcional; evita novo download)
     caminho_navegador: str | None = os.environ.get("CERTIDOES_CHROMIUM") or None
     #: proxy corporativo, se houver (ex.: http://proxy.escritorio:3128)

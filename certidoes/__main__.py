@@ -18,6 +18,10 @@ def principal(argumentos: list[str] | None = None) -> int:
     sub.add_parser("renovar", help="verifica vencimentos e enfileira as renovações")
     sub.add_parser("catalogo", help="recarrega o catálogo de tipos de certidão")
     sub.add_parser("demonstracao", help="cria titulares fictícios para conhecer o sistema")
+    inspecionar = sub.add_parser("inspecionar", help="lista os campos de um site, para escrever a receita")
+    inspecionar.add_argument("url")
+    inspecionar.add_argument("--espera", type=int, default=0,
+                             help="segundos para você navegar antes da captura")
     opcoes = parser.parse_args(argumentos)
 
     if opcoes.comando == "renovar":
@@ -32,6 +36,18 @@ def principal(argumentos: list[str] | None = None) -> int:
 
         iniciar_banco()
         print(f"{carregar()} tipo(s) novo(s) no catálogo.")
+        return 0
+
+    if opcoes.comando == "inspecionar":
+        import asyncio
+
+        from .automacao.inspecao import inspecionar as inspecionar_site
+
+        pagina = asyncio.run(inspecionar_site(opcoes.url, opcoes.espera))
+        print(f"\n{pagina['titulo']}\n{pagina['url']}\n")
+        for campo in pagina["campos"]:
+            rotulo = campo["rotulo"] or campo["texto"] or campo["tipo"]
+            print(f"  {campo['sugestao']:24} {campo['seletor']:52} {rotulo[:40]}")
         return 0
 
     if opcoes.comando == "demonstracao":

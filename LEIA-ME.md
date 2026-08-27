@@ -42,6 +42,23 @@ O painel classifica cada linha em **vigente**, **vence em breve**, **vencida**,
 nome. Certidão positiva não entra em renovação automática: reemitir não resolve
 débito, e o sistema não finge que resolve.
 
+### Nome dos arquivos
+
+Todo PDF arquivado recebe um nome segundo o padrão do escritório, definido em
+**Configurações › Nome dos arquivos** com prévia ao vivo. O padrão de fábrica:
+
+```
+CNDT_Construtora-Horizonte-Ltda_11222333000181_valida-ate-2027-02-22.pdf
+```
+
+Campos disponíveis: `{sigla}`, `{codigo}`, `{certidao}`, `{orgao}`, `{nome}`,
+`{documento}`, `{documento_formatado}`, `{emissao}`, `{validade}`, `{emissao_br}`,
+`{validade_br}`, `{ano}`, `{numero}`. O sistema recusa modelos que não
+identifiquem o titular ou não diferenciem as versões, tira acentos e caracteres
+proibidos, corta nomes longos demais e nunca deixa uma certidão sobrescrever
+outra de conteúdo diferente. Os arquivos continuam organizados em pastas por
+titular e ano.
+
 ### Validade: o documento manda
 
 `validade_dias` do catálogo é só o padrão do órgão. Quando o PDF informa a data de
@@ -74,12 +91,47 @@ Passos disponíveis: `abrir`, `preencher`, `selecionar`, `clicar`, `esperar`,
 `{documento_formatado}`, `{nome}`, `{uf}`, `{municipio}`, `{email}`,
 `{inscricao_estadual}`, `{url}` e outras (veja `servicos.variaveis_do_contexto`).
 
-**O captcha é respondido por uma pessoa.** O sistema recorta a imagem da tela do
-órgão, mostra no painel, recebe o que o usuário digitou e devolve ao site — nada é
-quebrado, contornado ou terceirizado. Se o site recusar a resposta, ele refaz o
-caminho com uma imagem nova, até três vezes. O login gov.br funciona igual: a
-janela do navegador abre, a pessoa autentica, e a sessão fica guardada para as
-próximas emissões daquele titular.
+Passos disponíveis: `abrir`, `preencher`, `selecionar`, `clicar`, `esperar`,
+`captcha_imagem`, `captcha_interativo`, `login_gov_br`, `acao_manual`,
+`exigir_texto`, `aguardar_download`, `salvar_pagina_pdf`.
+
+### Captcha em escala: o problema dos 40 captchas
+
+Emitir 40 certidões não pode custar 40 interrupções. Três mecanismos atacam isso:
+
+**1. Sala de captchas.** As emissões com captcha de letras rodam **em paralelo**
+(quatro por vez, ajustável). As imagens chegam a uma única tela, uma atrás da
+outra: você digita, tecla Enter e a próxima já está lá — sem esperar cada site
+carregar, sem trocar de janela. Quarenta captchas viram alguns minutos de
+digitação em vez de quarenta esperas. Quem responde continua sendo uma pessoa: o
+sistema não quebra, não contorna e não terceiriza captcha, porque esse controle
+existe justamente para exigir presença humana, e burlá-lo em sistema público não
+é caminho que este projeto siga.
+
+**2. Login uma vez, muitas emissões.** Uma receita pode declarar `perfil: govbr`.
+O navegador guarda a sessão daquele perfil: você entra no gov.br **uma vez** e as
+emissões seguintes reaproveitam o login, sem novo captcha e sem nova senha. O
+passo `login_gov_br` ainda aceita `sinal_logado` — um seletor que só existe na
+página quando a sessão está ativa — e nem chega a incomodar você quando já está.
+
+**3. Não emitir o que não precisa.** Certidão vigente não é reemitida; certidão
+positiva não entra em renovação automática; e a renovação dispara por
+antecedência, espalhando o trabalho em vez de acumular tudo no mesmo dia.
+
+Onde o captcha é um widget interativo (hCaptcha, reCAPTCHA — o caso do portal
+novo da Receita), não há imagem para recortar: o passo `captcha_interativo` traz
+a janela do navegador para a frente, você resolve ali e confirma no painel. Essas
+emissões rodam **uma de cada vez**, porque ninguém opera quatro janelas ao mesmo
+tempo — e, enquanto uma delas espera por você, as de captcha de letras continuam
+rodando normalmente.
+
+### Quando o site muda
+
+Uma receita pode declarar `ao_falhar: pedir_anexo`. Se um passo não encontra o
+que esperava, em vez de falhar o sistema deixa o navegador aberto **na página
+certa**, avisa que o site mudou e pede o PDF. Você conclui à mão e o arquivo é
+arquivado normalmente — a receita desatualizada vira um contratempo, não um beco
+sem saída.
 
 Onde não há automação (ou ela ainda não foi validada), o sistema **abre o site
 certo** e pede o PDF: o arquivo anexado é arquivado, lido e passa a ser controlado
@@ -89,19 +141,35 @@ como qualquer outro — o controle de validade nunca depende da automação exis
 
 | Certidão | Situação |
 |---|---|
-| **CNDT** (TST) | Receita completa com captcha de imagem. Seletores conferidos contra o site em 27/08/2026. |
+| **CNDT** (TST) | Receita completa com captcha de imagem, paralelizável. Seletores conferidos contra o site em 27/08/2026. |
 | **CRF/FGTS** (Caixa) | Receita completa (CNPJ ou CPF + UF), sem captcha na consulta. Seletores conferidos em 27/08/2026. |
-| **CND Federal** (RFB/PGFN) | Modo assistido: o sistema abre o portal e arquiva o PDF que você anexar. O endereço direto de emissão muda com frequência e ainda não foi validado. |
-| **Justiça Federal** (TRF) | Modo assistido, com a URL configurável por Região. Vários tribunais bloqueiam acesso automatizado. |
-| **Estaduais e municipais** | Cadastradas como modelo no catálogo, sem receita: configure a URL do seu tribunal/SEFAZ/prefeitura na aba Catálogo. |
+| **CND Federal** (RFB/PGFN) | Receita escrita para o portal atual (`servicos.receitafederal.gov.br`), com `captcha_interativo`: a API recusa a emissão sem o token do hCaptcha, então o widget é resolvido por você na janela e o resto é automático. Seletores ainda não conferidos. |
+| **Certidão Unificada da Justiça Federal** (CJF) | Receita escrita para `certidao-unificada.cjf.jus.br`. Cobre as Regiões **exceto o TRF6**, que segue fora do sistema unificado — para a 6ª Região, emita à parte. Seletores ainda não conferidos: o site recusa conexões de fora de uma rede comum. |
+| **Estaduais e municipais** | Cadastradas como modelo no catálogo, sem receita: use **Configurações › Mapear um site novo** para descobrir os campos do seu tribunal/SEFAZ/prefeitura. |
 
 Honestidade sobre o estado atual: **as receitas da CNDT e do FGTS foram escritas a
 partir dos formulários reais**, e o motor de navegador é testado de ponta a ponta
 (preencher, ler captcha, receber recusa, repetir, baixar o PDF) contra uma réplica
-local dos portais. O que ainda falta é rodar essas duas receitas contra os sites de
-produção na sua máquina, com um CNPJ real — é a primeira coisa a fazer depois de
-instalar. Sites de órgão mudam; por isso cada tipo mostra no Catálogo a data em que
-sua receita foi conferida.
+local dos portais. As da Receita e do CJF foram escritas sem poder abrir as
+páginas — a primeira é um aplicativo Angular protegido por hCaptcha, a segunda
+recusa conexões de fora de uma rede comum. As quatro precisam de uma execução real
+na sua máquina; as duas últimas, de um ajuste de seletores. Por isso todas
+declaram `ao_falhar: pedir_anexo`: mesmo antes do acerto fino, o pior caso é você
+concluir na janela já aberta na página certa. Cada tipo mostra no Catálogo a data
+em que sua receita foi conferida.
+
+### Mapear um site novo, sem programar
+
+**Configurações › Mapear um site novo** abre o endereço que você informar, espera
+o tempo que você pedir (para navegar até a tela certa, inclusive passando por um
+login) e lista cada campo da página com o seletor pronto e um palpite do que ele
+serve — "preencher (documento)", "clicar", "captcha_imagem", "captcha_interativo".
+É com essa lista que se completa a receita de um tribunal ou de uma prefeitura.
+Pela linha de comando, o mesmo:
+
+```
+python -m certidoes inspecionar https://site-do-orgao.gov.br --espera 30
+```
 
 ## Segurança e dados
 
@@ -135,6 +203,7 @@ instalado.
 | `CERTIDOES_NAVEGADOR_VISIVEL` | `0` esconde a janela do navegador. |
 | `CERTIDOES_CHROMIUM` | Caminho de um Chrome/Chromium já instalado. |
 | `CERTIDOES_PROXY` | Proxy corporativo, se houver. |
+| `CERTIDOES_PARALELISMO` | Quantas emissões de captcha de letras rodam juntas (padrão 4). |
 
 Comandos de manutenção (úteis para agendar no Windows/cron):
 
@@ -152,9 +221,10 @@ certidoes/
   servicos.py     regras de aplicação usadas pela API
   fila.py         executa as solicitações, uma a uma
   agenda.py       renovação automática antes do vencimento
+  nomeacao.py     padrão de nome dos PDFs arquivados
   catalogo/       catálogo de certidões (YAML)
   receitas/       uma receita por órgão (YAML)
-  automacao/      motor de navegador, simulador, captcha e leitura do PDF
+  automacao/      motor de navegador, simulador, captcha, inspeção e leitura do PDF
   api/            FastAPI
   web/            painel (HTML/CSS/JS, sem build)
 testes/           inclui uma réplica local de portal para testar o navegador
@@ -162,8 +232,9 @@ testes/           inclui uma réplica local de portal para testar o navegador
 
 ## Próximos passos naturais
 
-1. Validar CNDT e FGTS contra os sites de produção e marcar a data de conferência.
-2. Mapear a CND Federal e um TJ estadual (o de maior volume no escritório).
+1. Rodar as quatro receitas contra os sites de produção, ajustar os seletores da
+   Receita e do CJF com o mapeador e marcar a data de conferência.
+2. Mapear o TJ estadual de maior volume no escritório e a SEFAZ da UF principal.
 3. Aviso por e-mail dos vencimentos (hoje o alerta é o painel).
 4. Exportar o "dossiê de habilitação": um PDF único com todas as certidões vigentes
    de um titular — é o que a licitação pede.

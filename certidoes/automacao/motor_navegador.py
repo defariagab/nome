@@ -142,12 +142,46 @@ async def _executar_passos(receita: Receita, ctx: Contexto, navegador: Navegador
             )
             await pagina.fill(ctx.aplicar(passo.get("campo")), resposta.strip())
 
+        elif acao == "captcha_interativo":
+            # hCaptcha e reCAPTCHA não são uma imagem que dá para recortar: são
+            # um widget que reage ao mouse. A pessoa resolve na janela real, e a
+            # automação segue de onde parou.
+            seletor = ctx.aplicar(passo.get("seletor"))
+            if seletor:
+                await pagina.wait_for_selector(seletor)
+            await pagina.bring_to_front()
+            await ctx.perguntar(
+                tipo=TipoDesafio.CAPTCHA_INTERATIVO,
+                instrucao=ctx.aplicar(passo.get("instrucao")) or (
+                    "Resolva o captcha na janela do navegador que está aberta e confirme aqui."
+                ),
+                timeout=int(passo.get("timeout", 600)),
+            )
+            if confirmacao := ctx.aplicar(passo.get("confirmar_seletor")):
+                try:
+                    await pagina.wait_for_selector(confirmacao, timeout=5_000)
+                except Exception as erro:
+                    raise ErroAutomacao(
+                        "O site não registrou o captcha como resolvido. Tente novamente."
+                    ) from erro
+
         elif acao == "login_gov_br":
+            if sinal := ctx.aplicar(passo.get("sinal_logado")):
+                # já autenticado nesta sessão: não incomoda o usuário de novo
+                try:
+                    await pagina.wait_for_selector(sinal, timeout=4_000)
+                    ctx.registrar("sessao", "Sessão gov.br já ativa; login dispensado.")
+                    continue
+                except Exception:
+                    pass
+            await pagina.bring_to_front()
             await ctx.perguntar(
                 tipo=TipoDesafio.LOGIN_GOV_BR,
-                instrucao=passo.get("instrucao")
-                or "Faça o login no gov.br na janela do navegador e confirme aqui quando terminar.",
-                timeout=int(passo.get("timeout", 600)),
+                instrucao=ctx.aplicar(passo.get("instrucao")) or (
+                    "Faça o login no gov.br na janela do navegador e confirme aqui. "
+                    "O login vale para as próximas emissões — você não precisará repetir."
+                ),
+                timeout=int(passo.get("timeout", 900)),
             )
 
         elif acao == "acao_manual":
@@ -214,4 +248,27 @@ async def _executar_passos(receita: Receita, ctx: Contexto, navegador: Navegador
 async def executar(receita: Receita, ctx: Contexto) -> Resultado:
     """Uma tentativa completa da receita, em um navegador limpo."""
     async with Navegador(visivel=ctx.visivel, pasta_sessao=ctx.pasta_sessao) as navegador:
-        return await _executar_passos(receita, ctx, navegador)
+        try:
+            return await _executar_passos(receita, ctx, navegador)
+        except ErroAutomacao:
+            raise
+        except Exception as erro:
+            # Site mudou, campo sumiu, página demorou: em vez de falhar seco, a
+            # receita pode entregar o trabalho já adiantado para a pessoa
+            # concluir na janela que ficou aberta na página certa.
+            if receita.ao_falhar != "pedir_anexo":
+                raise
+            ctx.registrar("degradou", f"A automação parou em um passo: {type(erro).__name__}")
+            await ctx.perguntar(
+                tipo=TipoDesafio.ACAO_MANUAL,
+                instrucao=(
+                    "A automação não reconheceu esta página — o site do órgão deve ter mudado. "
+                    "O navegador está aberto no lugar certo: conclua a emissão por lá, salve o "
+                    "PDF e anexe aqui. O controle de validade continua igual."
+                ),
+                timeout=900,
+            )
+            return Resultado(
+                sucesso=True, aguarda_anexo=True,
+                mensagem="A automação parou no meio; anexe o PDF emitido no site.",
+            )

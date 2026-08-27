@@ -32,7 +32,9 @@ class Esfera(str, enum.Enum):
 
 class Captcha(str, enum.Enum):
     NENHUM = "nenhum"
+    #: letras numa imagem: o sistema recorta e mostra na sala de captchas
     IMAGEM = "imagem"
+    #: widget interativo: resolvido na própria janela do navegador
     RECAPTCHA = "recaptcha"
     HCAPTCHA = "hcaptcha"
     DESCONHECIDO = "desconhecido"
@@ -75,6 +77,8 @@ class SituacaoCertidao(str, enum.Enum):
 
 class TipoDesafio(str, enum.Enum):
     CAPTCHA_IMAGEM = "captcha_imagem"
+    #: hCaptcha/reCAPTCHA: resolvido na própria janela do navegador
+    CAPTCHA_INTERATIVO = "captcha_interativo"
     LOGIN_GOV_BR = "login_gov_br"
     ACAO_MANUAL = "acao_manual"
 
@@ -259,6 +263,16 @@ class Credencial(Base):
     usuario: Mapped[str | None] = mapped_column(String(120))
     segredo: Mapped[str | None] = mapped_column(Text)  # cifrado
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+
+class Configuracao(Base):
+    """Preferências do escritório, editáveis pela tela."""
+
+    __tablename__ = "configuracao"
+
+    chave: Mapped[str] = mapped_column(String(60), primary_key=True)
+    valor: Mapped[str] = mapped_column(Text)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime, default=agora, onupdate=agora)
 
 
 class Evento(Base):

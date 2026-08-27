@@ -62,10 +62,15 @@ async def executar(receita: Receita, ctx: Contexto) -> Resultado:
                     repetir=True,
                 )
 
-        elif passo.acao in {"acao_manual", "login_gov_br"}:
+        elif passo.acao in {"acao_manual", "login_gov_br", "captcha_interativo"}:
             aguarda_anexo = aguarda_anexo or passo.acao == "acao_manual"
+            tipos = {
+                "acao_manual": TipoDesafio.ACAO_MANUAL,
+                "login_gov_br": TipoDesafio.LOGIN_GOV_BR,
+                "captcha_interativo": TipoDesafio.CAPTCHA_INTERATIVO,
+            }
             await ctx.perguntar(
-                tipo=TipoDesafio.ACAO_MANUAL if passo.acao == "acao_manual" else TipoDesafio.LOGIN_GOV_BR,
+                tipo=tipos[passo.acao],
                 instrucao=ctx.aplicar(passo.get("instrucao")) or "Confirme para continuar.",
                 timeout=int(passo.get("timeout", 600)),
             )

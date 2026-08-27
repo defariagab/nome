@@ -7,6 +7,7 @@ const estado = {
   titulares: [],
   painel: [],
   desafioAtual: null,
+  desafios: [],
   desafiosAdiados: new Set(),
   resumo: null,
 };
@@ -582,73 +583,217 @@ function formularioTipo(tipo) {
   ]);
 }
 
-/* ------------------------------------------------------ pedidos de ajuda */
-async function verificarDesafios() {
+/* ------------------------------------------------------ sala de captchas */
+/* Vários pedidos de ajuda chegam juntos de propósito: as emissões com captcha
+   de letras rodam em paralelo, então a pessoa responde uma imagem atrás da
+   outra, sem esperar cada site carregar. Responder já mostra a próxima. */
+
+let salaAberta = false;
+
+const PRECISA_DIGITAR = new Set(["captcha_imagem"]);
+
+async function atualizarDesafios() {
   let abertos = [];
   try {
     abertos = await fetch("/api/desafios").then((r) => (r.ok ? r.json() : []));
   } catch {
     return;
   }
-  const desafio = abertos.find((d) => !estado.desafiosAdiados.has(d.id));
   const idsAbertos = new Set(abertos.map((d) => d.id));
   for (const id of estado.desafiosAdiados) {
     if (!idsAbertos.has(id)) estado.desafiosAdiados.delete(id);
   }
+  estado.desafios = abertos.filter((d) => !estado.desafiosAdiados.has(d.id));
+  if (!estado.desafios.length) return fecharSala();
+  if (!salaAberta) salaAberta = true;
+  desenharSala();
+}
 
-  if (!desafio) {
-    if (estado.desafioAtual) {
-      estado.desafioAtual = null;
-      $("#cortina-desafio").classList.add("oculto");
-      carregar();
-    }
-    return;
-  }
-  if (estado.desafioAtual?.id === desafio.id) return;
+function fecharSala() {
+  if (!salaAberta) return;
+  salaAberta = false;
+  estado.desafioAtual = null;
+  $("#cortina-desafio").classList.add("oculto");
+  carregar();
+}
 
+function desenharSala() {
+  const desafio = estado.desafios[0];
+  if (!desafio) return fecharSala();
+  const mesmo = estado.desafioAtual?.id === desafio.id;
   estado.desafioAtual = desafio;
-  const ehCaptcha = desafio.tipo === "captcha_imagem";
-  const entrada = el("input", { type: "text", placeholder: "Digite aqui", autocomplete: "off" });
-  entrada.addEventListener("keydown", (e) => { if (e.key === "Enter") $("#desafio-enviar").click(); });
 
-  $("#desafio-titulo").textContent = ehCaptcha ? "Digite o captcha" : "O sistema precisa de você";
+  const digitar = PRECISA_DIGITAR.has(desafio.tipo);
+  const restantes = estado.desafios.length;
+  const entrada = el("input", {
+    type: "text", placeholder: "Digite e tecle Enter", autocomplete: "off", spellcheck: "false",
+  });
+  entrada.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); enviarResposta(entrada.value.trim()); }
+  });
+
+  $("#desafio-titulo").textContent = digitar
+    ? (restantes > 1 ? `Captchas — faltam ${restantes}` : "Digite o captcha")
+    : "O sistema precisa de você";
+
   $("#desafio-corpo").replaceChildren(el("div", {}, [
     el("p", { class: "apoio" }, `${desafio.certidao} — ${desafio.titular}`),
     el("div", { class: "instrucao" }, desafio.instrucao),
-    desafio.imagem ? el("div", { class: "captcha-caixa" }, el("img", { src: desafio.imagem, alt: "Imagem do captcha" })) : null,
-    ehCaptcha ? entrada : null,
+    desafio.imagem
+      ? el("div", { class: "captcha-caixa" }, el("img", { src: desafio.imagem, alt: "Imagem do captcha" }))
+      : null,
+    digitar ? entrada : null,
+    restantes > 1
+      ? el("p", { class: "apoio", style: "margin-top:10px" },
+          `Responda e o próximo aparece na hora. ${restantes} pedido(s) na fila.`)
+      : null,
   ]));
-  $("#desafio-enviar").textContent = ehCaptcha ? "Enviar" : "Concluí, pode continuar";
-  $("#cortina-desafio").classList.remove("oculto");
-  setTimeout(() => entrada.focus(), 50);
 
-  $("#desafio-enviar").onclick = async () => {
-    const resposta = ehCaptcha ? entrada.value.trim() : "ok";
-    if (ehCaptcha && !resposta) return avisar("Digite os caracteres da imagem.", "erro");
-    $("#desafio-enviar").disabled = true;
-    try {
-      await api(`/api/desafios/${desafio.id}/responder`, {
-        method: "POST", body: JSON.stringify({ resposta }),
-      });
-      $("#cortina-desafio").classList.add("oculto");
-      estado.desafioAtual = null;
-    } finally {
-      $("#desafio-enviar").disabled = false;
-    }
-  };
+  $("#desafio-enviar").textContent = digitar
+    ? (restantes > 1 ? "Enviar e próximo" : "Enviar")
+    : "Já resolvi, pode continuar";
+  $("#cortina-desafio").classList.remove("oculto");
+  if (!mesmo || document.activeElement !== entrada) setTimeout(() => entrada.focus(), 30);
+
+  $("#desafio-enviar").onclick = () => enviarResposta(digitar ? entrada.value.trim() : "ok");
   $("#desafio-adiar").onclick = () => {
-    // A automação continua esperando; a pessoa só volta a este pedido quando puder.
     estado.desafiosAdiados.add(desafio.id);
-    $("#cortina-desafio").classList.add("oculto");
-    estado.desafioAtual = null;
+    estado.desafios.shift();
     avisar("Pedido adiado. Ele continua aberto na aba Solicitações.");
+    desenharSala();
   };
   $("#desafio-cancelar").onclick = async () => {
-    await api(`/api/solicitacoes/${desafio.solicitacao_id}/cancelar`, { method: "POST" });
-    $("#cortina-desafio").classList.add("oculto");
-    estado.desafioAtual = null;
+    const alvo = estado.desafios.shift();
+    desenharSala();
+    await api(`/api/solicitacoes/${alvo.solicitacao_id}/cancelar`, { method: "POST" });
     await carregar();
   };
+}
+
+async function enviarResposta(resposta) {
+  const desafio = estado.desafios[0];
+  if (!desafio) return;
+  if (PRECISA_DIGITAR.has(desafio.tipo) && !resposta) {
+    return avisar("Digite os caracteres da imagem.", "erro");
+  }
+  // Mostra o próximo imediatamente e envia em segundo plano: é isso que faz
+  // 40 captchas virarem alguns minutos de digitação em vez de 40 esperas.
+  estado.desafios.shift();
+  desenharSala();
+  try {
+    await api(`/api/desafios/${desafio.id}/responder`, {
+      method: "POST", body: JSON.stringify({ resposta }),
+    });
+  } catch {
+    estado.desafios.unshift(desafio);
+    desenharSala();
+  }
+}
+
+/* ----------------------------------------------------------- configurações */
+async function desenharConfiguracoes() {
+  const preferencias = await api("/api/preferencias");
+  const entrada = el("input", { type: "text", value: preferencias.padrao_nome_arquivo });
+  const previa = el("code", {}, preferencias.exemplo);
+
+  entrada.addEventListener("input", () => {
+    previa.textContent = montarExemplo(entrada.value);
+  });
+
+  const salvar = el("button", { class: "botao primario" }, "Salvar padrão");
+  salvar.addEventListener("click", async () => {
+    const r = await api("/api/preferencias", {
+      method: "PUT", body: JSON.stringify({ padrao_nome_arquivo: entrada.value }),
+    });
+    previa.textContent = r.exemplo;
+    avisar("Padrão de nome salvo. Vale para as próximas certidões arquivadas.", "bom");
+  });
+
+  const campos = el("div", { class: "escolhas", style: "max-height:200px" },
+    Object.entries(preferencias.campos).map(([campo, descricao]) =>
+      el("div", { class: "escolha" }, [
+        el("code", { style: "min-width:170px" }, `{${campo}}`),
+        el("div", { class: "detalhe" }, descricao),
+      ])
+    )
+  );
+
+  const urlInspecao = el("input", { type: "text", placeholder: "https://site-do-orgao.gov.br/..." });
+  const esperaInspecao = el("input", { type: "number", value: "0", min: "0", max: "300" });
+  const resultado = el("div", {});
+  const inspecionar = el("button", { class: "botao secundario" }, "Abrir e listar os campos");
+  inspecionar.addEventListener("click", async () => {
+    inspecionar.disabled = true;
+    inspecionar.textContent = "Abrindo o site...";
+    try {
+      const r = await api("/api/inspecionar", {
+        method: "POST",
+        body: JSON.stringify({ url: urlInspecao.value, espera: Number(esperaInspecao.value) || 0 }),
+      });
+      resultado.replaceChildren(
+        el("p", { class: "apoio" }, `${r.titulo || "(sem título)"} — ${r.campos.length} campo(s)`),
+        el("table", {}, [
+          el("thead", {}, el("tr", {}, ["Serve para", "Seletor", "Rótulo"].map((x) => el("th", {}, x)))),
+          el("tbody", {}, r.campos.map((c) =>
+            el("tr", {}, [
+              el("td", {}, c.sugestao),
+              el("td", {}, el("code", {}, c.seletor)),
+              el("td", { class: "secundaria" }, c.rotulo || c.texto || c.alternativo || ""),
+            ])
+          )),
+        ])
+      );
+    } finally {
+      inspecionar.disabled = false;
+      inspecionar.textContent = "Abrir e listar os campos";
+    }
+  });
+
+  $("#conteudo-configuracoes").replaceChildren(
+    el("div", { class: "bloco" }, [
+      el("div", { class: "bloco-cabecalho" }, el("h2", {}, "Nome dos arquivos")),
+      el("div", { style: "padding:18px" }, [
+        el("p", { class: "apoio" },
+          "Todo PDF arquivado recebe este nome. Ele vai para a pasta do cliente e para o processo, então precisa se explicar sozinho."),
+        el("div", { class: "campo" }, [el("label", {}, "Modelo"), entrada]),
+        el("div", { class: "campo" }, [el("label", {}, "Fica assim"), el("div", { class: "registro" }, previa)]),
+        el("div", { class: "campo" }, [el("label", {}, "Campos disponíveis"), campos]),
+        salvar,
+      ]),
+    ]),
+    el("div", { class: "bloco" }, [
+      el("div", { class: "bloco-cabecalho" }, el("h2", {}, "Mapear um site novo")),
+      el("div", { style: "padding:18px" }, [
+        el("p", { class: "apoio" },
+          "Abre o site do órgão e lista os campos com o seletor de cada um — é o que permite acrescentar o seu tribunal, a SEFAZ ou a prefeitura sem ler código."),
+        el("div", { class: "campo" }, [el("label", {}, "Endereço"), urlInspecao]),
+        el("div", { class: "campo" }, [
+          el("label", {}, ["Esperar quantos segundos antes de capturar ",
+            el("span", { class: "dica" }, "para você navegar até a tela certa")]),
+          esperaInspecao,
+        ]),
+        inspecionar,
+        resultado,
+      ]),
+    ])
+  );
+}
+
+function montarExemplo(padrao) {
+  const valores = {
+    sigla: "CNDT", codigo: "cndt",
+    certidao: "Certidao-Negativa-de-Debitos-Trabalhistas",
+    orgao: "Tribunal-Superior-do-Trabalho",
+    nome: "Construtora-Horizonte-Ltda",
+    documento: "11222333000181", documento_formatado: "11.222.333-0001-81",
+    emissao: "2026-08-27", validade: "2027-02-22",
+    emissao_br: "27-08-2026", validade_br: "22-02-2027",
+    ano: "2026", numero: "12345678-2026",
+  };
+  let nome = padrao || "";
+  for (const [campo, valor] of Object.entries(valores)) nome = nome.split(`{${campo}}`).join(valor);
+  nome = nome.replace(/\{[a-z_]+\}/g, "").replace(/-{2,}/g, "-").replace(/^[-._]+|[-._]+$/g, "");
+  return `${nome || "certidao"}.pdf`;
 }
 
 /* -------------------------------------------------------------- navegação */
@@ -658,6 +803,7 @@ const TITULOS = {
   solicitacoes: ["Solicitações", "A fila de emissões e o histórico de tentativas."],
   acervo: ["Acervo", "Todos os documentos arquivados, com o PDF original."],
   catalogo: ["Catálogo", "Como cada certidão é obtida e por quanto tempo vale."],
+  configuracoes: ["Configurações", "Padrão de nome dos arquivos e mapeamento de sites novos."],
 };
 
 function irPara(pagina) {
@@ -674,6 +820,7 @@ function irPara(pagina) {
   $("#botao-emitir-pendentes").classList.toggle("oculto", pagina !== "painel");
   if (pagina === "solicitacoes") desenharSolicitacoes();
   if (pagina === "acervo") desenharAcervo();
+  if (pagina === "configuracoes") desenharConfiguracoes();
 }
 
 /* ------------------------------------------------------------------ carga */
@@ -729,6 +876,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   irPara(location.hash.slice(1) || "painel");
   carregar();
-  setInterval(verificarDesafios, 2500);
+  setInterval(atualizarDesafios, 1500);
   setInterval(() => { if (!$("#cortina").classList.contains("oculto")) return; carregar(); }, 15000);
 });

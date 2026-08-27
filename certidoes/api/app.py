@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from .. import agenda, arquivos, catalogo, servicos
+from .. import agenda, arquivos, catalogo, nomeacao, servicos
 from ..automacao import desafios
 from ..banco import iniciar, sessao
 from ..config import config
@@ -373,6 +373,59 @@ def listar_eventos(limite: int = Query(50, le=200)):
 @app.post("/api/renovacao/varrer")
 def varrer_renovacoes():
     return {"criadas": len(agenda.varrer())}
+
+
+# --------------------------------------------------------------------------- #
+# Preferências do escritório
+# --------------------------------------------------------------------------- #
+
+class Preferencias(BaseModel):
+    padrao_nome_arquivo: str
+
+
+@app.get("/api/preferencias")
+def ler_preferencias():
+    with sessao() as s:
+        padrao = servicos.preferencia(s, "padrao_nome_arquivo", nomeacao.PADRAO)
+    return {
+        "padrao_nome_arquivo": padrao,
+        "padrao_do_sistema": nomeacao.PADRAO,
+        "exemplo": nomeacao.exemplo(padrao),
+        "campos": nomeacao.CAMPOS,
+        "paralelismo": config.paralelismo,
+    }
+
+
+@app.put("/api/preferencias")
+def salvar_preferencias(dados: Preferencias):
+    try:
+        padrao = nomeacao.validar(dados.padrao_nome_arquivo)
+    except ValueError as erro:
+        raise servicos.ErroDeUso(str(erro)) from erro
+    with sessao() as s:
+        servicos.definir_preferencia(s, "padrao_nome_arquivo", padrao)
+    return {"padrao_nome_arquivo": padrao, "exemplo": nomeacao.exemplo(padrao)}
+
+
+class PedidoInspecao(BaseModel):
+    url: str
+    espera: int = 0
+
+
+@app.post("/api/inspecionar")
+async def inspecionar_site(pedido: PedidoInspecao):
+    """Abre o site do órgão e lista os campos, para montar/corrigir a receita."""
+    if not pedido.url.startswith(("http://", "https://")):
+        raise servicos.ErroDeUso("Informe o endereço completo, começando com https://")
+    from ..automacao.inspecao import inspecionar
+
+    try:
+        return await inspecionar(pedido.url, espera=min(max(pedido.espera, 0), 300))
+    except Exception as erro:
+        raise servicos.ErroDeUso(
+            f"Não consegui abrir a página: {erro}. Confira o endereço e se o navegador "
+            "do Playwright está instalado."
+        ) from erro
 
 
 @app.get("/api/saude")

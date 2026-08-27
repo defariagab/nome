@@ -1,14 +1,27 @@
 codigo: rfb_pgfn_conjunta
 nome: CND Federal — Receita Federal / PGFN
-# ATENÇÃO: endereço e seletores ainda NÃO conferidos contra o site (sem
-# `verificado_em`). Enquanto não forem, o sistema executa esta receita em modo
-# assistido: abre o site e pede que o usuário conclua e anexe o PDF.
-url: https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/certidoes-e-situacao-fiscal
-resultado: anexo_manual
+url: https://servicos.receitafederal.gov.br/servico/certidoes/#/home
+resultado: download
+ao_falhar: pedir_anexo
+# Sem `verificado_em`: os seletores abaixo ainda NÃO foram conferidos contra a
+# página. O portal é um aplicativo Angular protegido por hCaptcha — a API
+# recusa a emissão sem o token do widget ("CaptchaTokenNaoInformado"), por isso
+# o passo `captcha_interativo`: quem resolve é a pessoa, na janela do navegador.
+# Para completar os seletores, rode:  python -m certidoes inspecionar <url>
 passos:
   - acao: abrir
     url: "{url}"
-  - acao: acao_manual
+  - acao: esperar
+    ms: 2500
+  - acao: preencher
+    seletor: "input[formcontrolname='ni'], input[name='ni'], input[type='text']"
+    valor: "{documento}"
+  - acao: captcha_interativo
+    seletor: "iframe[src*='hcaptcha'], .h-captcha"
     instrucao: >-
-      Conclua a emissão da CND Federal no navegador que foi aberto e salve o PDF.
-      Depois volte aqui e anexe o arquivo para o sistema arquivar e controlar a validade.
+      Resolva o hCaptcha na janela do navegador que está aberta na página da
+      Receita e confirme aqui. O resto da emissão o sistema faz sozinho.
+  - acao: clicar
+    seletor: "button[type='submit'], button.br-button.primary"
+  - acao: aguardar_download
+    timeout: 120
