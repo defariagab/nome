@@ -17,6 +17,34 @@ from ..modelos import SituacaoCertidao, TipoDesafio
 from .extracao import analisar
 from .tipos import Contexto, ErroAutomacao, Receita, Resultado
 
+#: trechos que a mensagem do Playwright traz quando o Chromium não foi baixado
+SINAIS_SEM_NAVEGADOR = ("executable doesn't exist", "playwright install", "please run the following")
+
+SEM_NAVEGADOR = (
+    "O navegador que conversa com os sites dos órgãos não está instalado. "
+    "Feche o sistema e abra de novo pelo iniciar.bat (Windows) ou iniciar.command "
+    "(Mac): ele baixa o navegador sozinho. Enquanto isso, o controle de validade e "
+    "o arquivo de PDFs continuam funcionando normalmente."
+)
+
+
+def _erro_de_navegador(erro: Exception) -> ErroAutomacao | None:
+    """Traduz falhas de infraestrutura em algo que o usuário possa resolver."""
+    texto = str(erro).lower()
+    if any(sinal in texto for sinal in SINAIS_SEM_NAVEGADOR):
+        return ErroAutomacao(SEM_NAVEGADOR)
+    if "err_internet_disconnected" in texto or "err_name_not_resolved" in texto:
+        return ErroAutomacao(
+            "Não há conexão com a internet, ou o endereço do órgão não foi encontrado."
+        )
+    if "err_connection" in texto or "err_timed_out" in texto:
+        return ErroAutomacao(
+            "Não consegui alcançar o site do órgão. Ele pode estar fora do ar ou bloqueando "
+            "o acesso desta rede. Tente novamente mais tarde."
+        )
+    return None
+
+
 class Navegador:
     """Envolve o Playwright e mantém a sessão (cookies, login gov.br)."""
 
@@ -28,7 +56,10 @@ class Navegador:
         self._downloads: asyncio.Queue = asyncio.Queue()
 
     async def __aenter__(self):
-        from playwright.async_api import async_playwright
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError as erro:
+            raise ErroAutomacao(SEM_NAVEGADOR) from erro
 
         self._pw = await async_playwright().start()
         executavel = config.caminho_navegador
@@ -45,16 +76,26 @@ class Navegador:
             argumentos["ignore_https_errors"] = True
         if self.pasta_sessao:
             # Sessão persistente: o login gov.br feito uma vez continua valendo.
-            self._contexto = await self._pw.chromium.launch_persistent_context(
-                self.pasta_sessao, **argumentos
-            )
+            try:
+                self._contexto = await self._pw.chromium.launch_persistent_context(
+                    self.pasta_sessao, **argumentos
+                )
+            except Exception as erro:
+                if amigavel := _erro_de_navegador(erro):
+                    raise amigavel from erro
+                raise
         else:
             lancamento = {"headless": not self.visivel}
             if executavel:
                 lancamento["executable_path"] = executavel
             if config.proxy:
                 lancamento["proxy"] = {"server": config.proxy, "bypass": config.proxy_excecoes}
-            navegador = await self._pw.chromium.launch(**lancamento)
+            try:
+                navegador = await self._pw.chromium.launch(**lancamento)
+            except Exception as erro:
+                if amigavel := _erro_de_navegador(erro):
+                    raise amigavel from erro
+                raise
             self._contexto = await navegador.new_context(
                 accept_downloads=True,
                 locale="pt-BR",
@@ -111,7 +152,13 @@ async def _executar_passos(receita: Receita, ctx: Contexto, navegador: Navegador
         ctx.registrar("passo", acao)
 
         if acao == "abrir":
-            await pagina.goto(ctx.aplicar(passo.get("url")) or receita.url, wait_until="domcontentloaded")
+            endereco = ctx.aplicar(passo.get("url")) or receita.url
+            try:
+                await pagina.goto(endereco, wait_until="domcontentloaded")
+            except Exception as erro:
+                if amigavel := _erro_de_navegador(erro):
+                    raise amigavel from erro
+                raise
 
         elif acao == "clicar":
             await pagina.click(ctx.aplicar(passo.get("seletor")))

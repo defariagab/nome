@@ -97,3 +97,25 @@ def _enfileirar_extra(codigo: str, quantos: int) -> None:
         tipo = s.scalar(select(TipoCertidao).where(TipoCertidao.codigo == codigo))
         for titular in list(s.scalars(select(Titular)))[:quantos]:
             servicos.solicitar(s, titular.id, tipo.id)
+
+
+def test_falta_de_navegador_vira_instrucao_e_nao_culpa_do_site():
+    """A mensagem precisa dizer o que fazer, não mandar procurar o que não quebrou."""
+    from certidoes.automacao.motor_navegador import SEM_NAVEGADOR, _erro_de_navegador
+
+    faltando = _erro_de_navegador(Exception(
+        "BrowserType.launch: Executable doesn't exist at /opt/pw/chromium/chrome\n"
+        "Please run the following command to download new browsers"
+    ))
+    assert faltando is not None
+    assert str(faltando) == SEM_NAVEGADOR
+    assert "iniciar.bat" in str(faltando)
+
+    sem_rede = _erro_de_navegador(Exception("net::ERR_INTERNET_DISCONNECTED at https://x"))
+    assert "conexão com a internet" in str(sem_rede)
+
+    fora_do_ar = _erro_de_navegador(Exception("net::ERR_CONNECTION_RESET at https://x"))
+    assert "fora do ar" in str(fora_do_ar)
+
+    # o que não é de infraestrutura continua seguindo o caminho normal
+    assert _erro_de_navegador(Exception("Timeout 30000ms exceeded waiting for selector")) is None
