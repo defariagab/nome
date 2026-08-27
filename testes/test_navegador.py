@@ -13,7 +13,7 @@ import asyncio
 import pytest
 
 from certidoes.automacao.motor import executar
-from certidoes.automacao.tipos import Contexto, Passo, Fonte
+from certidoes.automacao.tipos import Contexto, ErroAutomacao, Fonte, Passo
 from certidoes.modelos import SituacaoCertidao
 from testes.site_falso import SiteFalso
 
@@ -156,3 +156,25 @@ def test_site_mudou_o_sistema_pede_o_anexo_em_vez_de_falhar():
     assert resultado.aguarda_anexo
     assert resultado.sucesso
     assert pedidos and pedidos[0].value == "acao_manual"
+
+
+@pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
+def test_pagina_de_indisponibilidade_nao_vira_certidao():
+    """A Caixa responde 200 com uma página que parece certificado. Não é."""
+    fonte = Fonte(
+        codigo="crf", nome="Certificado de teste", url="{url}/crf", resultado="pagina_pdf",
+        passos=[
+            Passo("abrir", {"url": "{url}/crf"}),
+            Passo("preencher", {"seletor": "#ins", "valor": "{documento}"}),
+            Passo("selecionar", {"seletor": "#uf", "valor": "{uf}"}),
+            Passo("clicar", {"seletor": "#consultar"}),
+            Passo("esperar", {"ms": 400}),
+            Passo("exigir_texto", {"alternativas": ["certificado de regularidade", "CRF"]}),
+            Passo("salvar_pagina_pdf", {}),
+        ],
+    )
+    with SiteFalso() as site:
+        contexto = _contexto(site.url, [], lambda: "")
+        contexto.variaveis["documento"] = "00000000000000"  # dispara a resposta de erro
+        with pytest.raises(ErroAutomacao, match="aviso"):
+            asyncio.run(executar(fonte, contexto, motor="navegador"))

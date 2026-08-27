@@ -8,7 +8,7 @@ from typing import Any, Iterable
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import arquivos, nomeacao
+from . import arquivos, nomeacao, validacao
 from .automacao.extracao import analisar
 from .documento import apenas_digitos, formatar, tipo_pessoa, valido
 from .modelos import (  # noqa: F401  (Titular é reexportado para conveniência)
@@ -274,6 +274,7 @@ def guardar_resultado(
     codigo_verificacao: str | None = None,
     situacao: SituacaoCertidao = SituacaoCertidao.NAO_IDENTIFICADA,
     origem: str = "automacao",
+    extensao: str = "pdf",
 ) -> Certidao:
     """Arquiva o PDF e cria a certidão, marcando a anterior como substituída."""
     titular = s.get(Titular, solicitacao.titular_id)
@@ -289,6 +290,7 @@ def guardar_resultado(
             documento_formatado=formatar(titular.documento),
             emitida_em=emissao, valida_ate=validade, numero=numero,
         ),
+        extensao=extensao,
     )
     caminho, digest = arquivos.guardar(
         documento, documento=titular.documento, emitida_em=emissao, nome_arquivo=nome_arquivo
@@ -336,6 +338,12 @@ def anexar_documento(s: Session, solicitacao_id: int, dados: bytes,
         raise ErroDeUso("O arquivo enviado está vazio.")
 
     lido = analisar(dados)
+    veredito = validacao.avaliar(
+        lido["texto"], situacao=lido["situacao"],
+        valida_ate=valida_ate or lido["valida_ate"], numero=lido["numero"],
+    )
+    if not veredito:
+        raise ErroDeUso(veredito.motivo)
     certidao = guardar_resultado(
         s, solicitacao,
         documento=dados,

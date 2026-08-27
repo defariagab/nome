@@ -14,6 +14,7 @@ from datetime import date
 
 import webbrowser
 
+from .. import validacao
 from ..config import config
 from ..modelos import SituacaoCertidao, TipoDesafio
 from .extracao import analisar
@@ -269,7 +270,15 @@ async def _executar_passos(fonte: Fonte, ctx: Contexto, navegador: Navegador) ->
             )
 
         elif acao == "exigir_texto":
-            texto = (await _texto_da_pagina(pagina)).lower()
+            texto_pagina_atual = await _texto_da_pagina(pagina)
+            # Antes de exigir o que deve estar, recusa o que não pode estar:
+            # página de erro costuma conter as palavras do documento certo.
+            if frase := validacao.frase_de_indisponibilidade(texto_pagina_atual):
+                raise ErroAutomacao(
+                    f'O órgão respondeu com um aviso ("{frase}") em vez da certidão. '
+                    "Vale tentar de novo mais tarde."
+                )
+            texto = texto_pagina_atual.lower()
             alternativas = [str(a).lower() for a in (passo.get("alternativas") or [])]
             if alternativas and not any(a in texto for a in alternativas):
                 raise ErroAutomacao(passo.get("mensagem") or "O site não apresentou o documento esperado.")
@@ -289,6 +298,12 @@ async def _executar_passos(fonte: Fonte, ctx: Contexto, navegador: Navegador) ->
                 raise ErroAutomacao("O site não entregou o arquivo no tempo esperado.") from erro
             caminho = await download.path()
             documento = caminho.read_bytes()
+            extensao = (download.suggested_filename or "").rpartition(".")[2].lower()
+            if documento[:4] != b"%PDF" and extensao not in {"pdf", ""}:
+                raise ErroAutomacao(
+                    f"O site entregou um arquivo .{extensao}, não a certidão em PDF. "
+                    "Confira no navegador o que o órgão apresentou."
+                )
 
         elif acao == "salvar_pagina_pdf":
             texto_pagina = await _texto_da_pagina(pagina)
@@ -308,6 +323,16 @@ async def _executar_passos(fonte: Fonte, ctx: Contexto, navegador: Navegador) ->
         )
 
     dados = analisar(documento, texto_pagina)
+    veredito = validacao.avaliar(
+        dados["texto"] or texto_pagina,
+        situacao=dados["situacao"],
+        valida_ate=dados["valida_ate"],
+        numero=dados["numero"],
+    )
+    if documento is not None and not veredito:
+        # Melhor falhar de forma clara do que arquivar uma página de erro como
+        # se fosse certidão: o painel ficaria verde sobre um documento inútil.
+        raise ErroAutomacao(veredito.motivo)
     return Resultado(
         sucesso=documento is not None,
         documento=documento,

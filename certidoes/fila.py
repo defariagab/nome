@@ -252,11 +252,14 @@ class Fila:
                 numero=resultado.numero,
                 codigo_verificacao=resultado.codigo_verificacao,
                 situacao=resultado.situacao,
+                extensao=resultado.extensao,
             )
             solicitacao.estado = EstadoSolicitacao.CONCLUIDA
             solicitacao.concluida_em = agora()
+            nome_do_arquivo = (certidao.arquivo or "").rpartition("/")[2]
             solicitacao.mensagem = (
-                f"Certidão arquivada, válida até {certidao.valida_ate.strftime('%d/%m/%Y')}."
+                f"Certidão arquivada como {nome_do_arquivo}, "
+                f"válida até {certidao.valida_ate.strftime('%d/%m/%Y')}."
             )
             servicos.anotar(s, solicitacao, "concluido", solicitacao.mensagem)
 

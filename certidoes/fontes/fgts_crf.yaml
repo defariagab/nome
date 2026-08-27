@@ -19,11 +19,14 @@ passos:
     seletor: "[id='mainForm:btnConsultar']"
   - acao: esperar
     ms: 2500
+  # "Regularidade" sozinha não serve: a página de erro da Caixa se chama
+  # "Situação de Regularidade do Empregador" e diz justamente o contrário.
+  # Exigimos o nome do documento emitido.
   - acao: exigir_texto
     alternativas:
-      - "Regularidade"
+      - "certificado de regularidade"
       - "CRF"
     mensagem: >-
-      A Caixa não apresentou o certificado. Em geral isso indica pendência de FGTS
-      do empregador — confira a mensagem na tela do navegador.
+      A Caixa não apresentou o certificado. Pode ser pendência de FGTS do
+      empregador ou instabilidade do sistema — confira a tela do navegador.
   - acao: salvar_pagina_pdf

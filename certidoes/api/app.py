@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 
@@ -435,6 +436,31 @@ def salvar_preferencias(dados: Preferencias):
         "email_escritorio": email,
         "exemplo": nomeacao.exemplo(padrao),
     }
+
+
+@app.post("/api/abrir-pasta")
+def abrir_pasta_de_documentos():
+    """Abre a pasta dos PDFs no explorador de arquivos.
+
+    O servidor roda na máquina do próprio usuário, então isto é só um atalho
+    para quem prefere ver os arquivos como vê qualquer outro documento.
+    """
+    import subprocess
+    import sys
+
+    caminho = str(config.pasta_documentos)
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(caminho)  # noqa: S606 - caminho é da própria configuração
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", caminho])
+        else:
+            subprocess.Popen(["xdg-open", caminho])
+    except Exception as erro:
+        raise servicos.ErroDeUso(
+            f"Não consegui abrir a pasta. Ela fica em: {caminho} ({erro})"
+        ) from erro
+    return {"pasta": caminho}
 
 
 class PedidoConferencia(BaseModel):

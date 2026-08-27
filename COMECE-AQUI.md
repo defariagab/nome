@@ -61,9 +61,16 @@ certidões ela precisa manter vigentes. A partir daí:
 Para o *E-mail do escritório*, que você define em Configurações. Em branco, vai
 para o e-mail do titular.
 
+**O sistema pode arquivar uma certidão errada?**
+Ele confere cada documento antes de arquivar e recusa páginas de erro e avisos de
+instabilidade, dizendo o motivo. Uma emissão que falha assim é tentada de novo
+mais tarde, sozinha.
+
 **Onde ficam meus arquivos?**
 Numa pasta só, `.certidoes` dentro da sua pasta de usuário: banco de dados, PDFs
-organizados por titular e ano, e as sessões de navegador. Backup = copiar essa pasta.
+organizados por titular e ano, e as sessões de navegador. Backup = copiar essa
+pasta. Em **Configurações › Onde ficam os documentos** há um botão que abre a
+pasta direto no explorador de arquivos.
 
 **Preciso deixar o programa aberto?**
 Para o sistema renovar sozinho, sim. Fechando a janela preta, ele para — o que já

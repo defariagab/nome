@@ -153,6 +153,25 @@ padronizado, leitura da validade no PDF, controle de vencimento, dossiê.
 Fontes assim nem abrem o navegador do sistema: não há por que abrir uma janela
 que o órgão vai recusar.
 
+### Página de erro não vira certidão
+
+Órgãos respondem com página de erro, aviso de instabilidade e tela de manutenção
+— tudo com status 200 e aparência de resposta normal. Arquivar isso como certidão
+é pior do que falhar: o painel fica verde, o dossiê leva a página errada e o
+problema só aparece na mesa do fiscal.
+
+Todo documento — emitido pela automação ou anexado à mão — passa por uma
+conferência antes de entrar no acervo. Ele é recusado quando traz aviso de
+indisponibilidade ("não foi possível verificar", "tente novamente mais tarde",
+"em manutenção", "acesso bloqueado") ou quando não traz nada que o identifique
+como certidão: nem situação, nem validade, nem número. A solicitação falha com o
+motivo em português, e a renovação automática tenta de novo mais tarde.
+
+Isto veio de um caso real: a Caixa respondeu com a página "Situação de
+Regularidade do Empregador" dizendo que **não** conseguiu verificar a
+regularidade, e a versão anterior arquivou como certificado válido — bastava a
+palavra "Regularidade" aparecer. Hoje um teste guarda esse documento exato.
+
 ### Quando o site muda
 
 Uma fonte pode declarar `ao_falhar: pedir_anexo`. Se um passo não encontra o

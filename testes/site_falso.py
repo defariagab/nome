@@ -76,11 +76,20 @@ class Manipulador(BaseHTTPRequestHandler):
         campos = parse_qs(self.rfile.read(tamanho).decode())
 
         if self.path == "/crf":
+            if campos.get("ins", [""])[0] == "00000000000000":
+                # a Caixa responde 200 com uma pagina que parece certificado
+                corpo = (
+                    "<html><body><h1>Situacao de Regularidade do Empregador</h1>"
+                    "<p>Nao foi possivel verificar a regularidade junto a CAIXA. "
+                    "Solicitamos tentar mais tarde.</p></body></html>"
+                )
+                self._responder(corpo.encode(), "text/html; charset=utf-8")
+                return
             if not campos.get("uf", [""])[0]:
                 self._responder(b"<html><body>Informe a UF</body></html>", "text/html; charset=utf-8")
                 return
             corpo = (
-                "<html><body><h1>Certificado de Regularidade</h1>"
+                "<html><body><h1>Certificado de Regularidade do FGTS - CRF</h1>"
                 f"<p>Inscricao: {campos.get('ins', [''])[0]}</p>"
                 "<p>Validade: 26/09/2026</p></body></html>"
             )

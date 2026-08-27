@@ -842,6 +842,24 @@ async function desenharConfiguracoes() {
       ]),
     ]),
     el("div", { class: "bloco" }, [
+      el("div", { class: "bloco-cabecalho" }, el("h2", {}, "Onde ficam os documentos")),
+      el("div", { style: "padding:18px" }, [
+        el("p", { class: "apoio" },
+          "Os PDFs ficam organizados por titular e ano, com o nome padronizado acima. " +
+          "Dá para consultá-los como qualquer outro arquivo, mesmo com o sistema fechado."),
+        el("button", {
+          class: "botao secundario",
+          onclick: async (e) => {
+            e.target.disabled = true;
+            try {
+              const r = await api("/api/abrir-pasta", { method: "POST" });
+              avisar(`Pasta aberta: ${r.pasta}`, "bom");
+            } finally { e.target.disabled = false; }
+          },
+        }, "Abrir a pasta dos documentos"),
+      ]),
+    ]),
+    el("div", { class: "bloco" }, [
       el("div", { class: "bloco-cabecalho" }, el("h2", {}, "Mapear um site novo")),
       el("div", { style: "padding:18px" }, [
         el("p", { class: "apoio" },

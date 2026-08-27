@@ -85,12 +85,23 @@ def codigo_de_verificacao(texto: str) -> str | None:
 
 
 def situacao(texto: str) -> SituacaoCertidao:
+    """Classifica a situação declarada no documento.
+
+    A palavra "regularidade" sozinha não serve de prova: ela aparece no
+    cabeçalho de páginas da Caixa que dizem justamente o contrário
+    ("Situação de Regularidade do Empregador — não foi possível verificar").
+    Só o nome do documento emitido conta.
+    """
     plano = _sem_acento(texto).upper()
     if re.search(r"POSITIVA\s+COM\s+EFEITOS?\s+DE\s+NEGATIVA", plano):
         return SituacaoCertidao.POSITIVA_COM_EFEITO_NEGATIVO
-    if "NEGATIVA" in plano or "REGULARIDADE" in plano:
+    if re.search(r"CERTID[AÃ]O\s+NEGATIVA|CERTIFICADO\s+DE\s+REGULARIDADE|\bCRF\b", plano):
         return SituacaoCertidao.NEGATIVA
-    if "POSITIVA" in plano or "CONSTAM DEBITOS" in plano:
+    if re.search(r"CERTID[AÃ]O\s+POSITIVA|CONSTAM\s+DEBITOS|EXISTEM\s+DEBITOS", plano):
+        return SituacaoCertidao.POSITIVA
+    if "NEGATIVA" in plano:
+        return SituacaoCertidao.NEGATIVA
+    if "POSITIVA" in plano:
         return SituacaoCertidao.POSITIVA
     return SituacaoCertidao.NAO_IDENTIFICADA
 
