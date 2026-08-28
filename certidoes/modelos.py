@@ -149,7 +149,12 @@ class TipoCertidao(Base):
     requer_certificado: Mapped[bool] = mapped_column(Boolean, default=False)
     captcha: Mapped[Captcha] = mapped_column(Enum(Captcha), default=Captcha.DESCONHECIDO)
     modo: Mapped[ModoObtencao] = mapped_column(Enum(ModoObtencao), default=ModoObtencao.MANUAL)
+    #: fonte usada por padrão
     fonte: Mapped[str | None] = mapped_column(String(60))
+    #: outras fontes possíveis para a MESMA certidão — por exemplo, operar o
+    #: site (grátis, com captcha) ou chamar a API contratada (paga, sem captcha).
+    #: Quem decide é o escritório, emissão a emissão.
+    fontes: Mapped[list | None] = mapped_column(JSON, default=list)
     url: Mapped[str | None] = mapped_column(String(500))
     #: quando os seletores da fonte foram conferidos contra o site real
     verificado_em: Mapped[date | None] = mapped_column(Date)
@@ -216,6 +221,8 @@ class Solicitacao(Base):
         Enum(EstadoSolicitacao), default=EstadoSolicitacao.NA_FILA, index=True
     )
     origem: Mapped[str] = mapped_column(String(20), default="manual")  # manual | renovacao
+    #: fonte escolhida para esta emissão; vazio usa a padrão do tipo
+    fonte: Mapped[str | None] = mapped_column(String(60))
     tentativas: Mapped[int] = mapped_column(Integer, default=0)
     agendada_para: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
     iniciada_em: Mapped[datetime | None] = mapped_column(DateTime)

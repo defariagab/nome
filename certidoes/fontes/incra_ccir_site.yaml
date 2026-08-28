@@ -1,0 +1,13 @@
+codigo: incra_ccir_site
+nome: CCIR — emissão no site do INCRA/SNCR
+url: https://sncr.serpro.gov.br/ccir/emissao
+resultado: anexo_manual
+ao_falhar: pedir_anexo
+passos:
+  - acao: abrir_no_navegador
+    url: "{url}"
+  - acao: acao_manual
+    instrucao: >-
+      Abri a emissão do CCIR no seu navegador. É preciso o código do imóvel
+      rural. Emita e anexe o PDF aqui para o sistema arquivar e avisar do
+      vencimento.

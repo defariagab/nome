@@ -1,0 +1,26 @@
+codigo: incra_ccir_api_serpro
+nome: CCIR — API Consulta CCIR (Serpro)
+tipo: api
+# Confirmado na documentação do Serpro em 28/08/2026: a API Consulta CCIR
+# permite consultar os códigos dos imóveis rurais pelo CPF/CNPJ do titular e os
+# dados do Certificado de Cadastro do Imóvel Rural.
+#   https://apicenter.estaleiro.serpro.gov.br/documentacao/consulta-ccir/
+#
+# Como ativar: contrate no Serpro, cadastre o token com o rótulo `serpro_ccir`
+# em Configurações › Credenciais de API e confira os campos abaixo contra a
+# referência que acompanha o contrato.
+url: https://gateway.apiserpro.serpro.gov.br/consulta-ccir/api/v1/ccir
+api:
+  endereco: "{url}"
+  metodo: GET
+  credencial: serpro_ccir
+  parametros:
+    ni: "{documento}"
+  custo_por_emissao: 0.0
+  resposta:
+    documento: dados.ccir
+    numero: dados.codigoImovel
+    emissao: dados.dataEmissao
+    validade: dados.dataValidade
+    erro: mensagem
+    formato_de_data: "%d/%m/%Y"

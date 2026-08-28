@@ -240,12 +240,16 @@ def ajustar_tipo(tipo_id: int, dados: AjusteTipo):
 class PedidoEmissao(BaseModel):
     titular_id: int
     tipo_id: int
+    #: qual fonte usar; vazio usa a padrão do tipo
+    fonte: str | None = None
 
 
 @app.post("/api/solicitacoes")
 def criar_solicitacao(pedido: PedidoEmissao):
     with sessao() as s:
-        solicitacao = servicos.solicitar(s, pedido.titular_id, pedido.tipo_id)
+        solicitacao = servicos.solicitar(
+            s, pedido.titular_id, pedido.tipo_id, fonte=pedido.fonte
+        )
         nomes = _nomes(s, solicitacao.titular_id, solicitacao.tipo_certidao_id)
         return serializacao.solicitacao(solicitacao, *nomes)
 

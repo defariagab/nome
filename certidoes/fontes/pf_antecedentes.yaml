@@ -1,0 +1,17 @@
+codigo: pf_antecedentes
+nome: Antecedentes Criminais — Polícia Federal
+url: https://servicos.pf.gov.br/epol-sinic-publico/
+resultado: anexo_manual
+# Consulta pública da PF. Existe a API "Antecedentes Criminais" no catálogo
+# gov.br Conecta, que devolve NADA CONSTA — mas o Conecta atende órgãos da
+# administração pública, não escritórios de advocacia. Por isso o caminho aqui
+# é abrir o site; se o seu escritório conseguir acesso ao Conecta, dá para
+# escrever uma fonte `tipo: api` como a do Serpro.
+passos:
+  - acao: abrir_no_navegador
+    url: "{url}"
+  - acao: acao_manual
+    instrucao: >-
+      Abri a consulta de antecedentes criminais da Polícia Federal no seu
+      navegador. Emita a certidão e salve o PDF; depois anexe aqui para o
+      sistema arquivar e controlar a validade.

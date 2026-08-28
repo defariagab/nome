@@ -15,6 +15,11 @@
   captcha: hcaptcha
   modo: manual
   fonte: rfb_pgfn_conjunta
+  # Duas maneiras de obter a MESMA certidão. A primeira é a padrão, grátis; a
+  # segunda é a API contratada, paga e sem captcha, para quando o volume pesar.
+  fontes:
+    - rfb_pgfn_conjunta
+    - rfb_pgfn_api_serpro
   url: https://servicos.receitafederal.gov.br/servico/certidoes/#/home
   observacoes: >-
     Emitida em conjunto por RFB e PGFN, para PF e PJ. O portal recusa navegador
@@ -22,24 +27,6 @@
     um acesso automatizado"), e o sistema não tenta contornar isso: ele abre o
     endereço no SEU navegador, onde o gov.br já está logado, e cuida do
     arquivamento e do controle de validade do PDF que você anexar.
-
-- codigo: rfb_pgfn_api_serpro
-  nome: Certidão Negativa de Débitos Federais (via API Consulta CND)
-  sigla: CND Federal (API)
-  orgao: Receita Federal do Brasil / Procuradoria-Geral da Fazenda Nacional
-  esfera: federal
-  validade_dias: 180
-  captcha: nenhum
-  modo: automatico
-  fonte: rfb_pgfn_api_serpro
-  ativo: false
-  url: https://www.loja.serpro.gov.br/consultacnd
-  observacoes: >-
-    Mesma certidão da CND Federal, emitida pela API oficial do Serpro em vez do
-    portal: sem captcha, sem bloqueio a automação e com contrato de suporte. As
-    chamadas são cobradas por consulta, e o custo de cada emissão fica
-    registrado para repasse ao cliente. Desativada até que o token seja
-    cadastrado em Configurações › Credenciais de API.
 
 - codigo: cndt
   nome: Certidão Negativa de Débitos Trabalhistas
@@ -131,3 +118,38 @@
   modo: manual
   url: ""
   observacoes: Configure por município; muitos exigem cadastro mobiliário (CCM/inscrição municipal).
+
+- codigo: pf_antecedentes_criminais
+  nome: Certidão de Antecedentes Criminais
+  sigla: Antecedentes PF
+  orgao: Polícia Federal
+  esfera: federal
+  aplica_pj: false
+  validade_dias: 90
+  captcha: desconhecido
+  modo: manual
+  fonte: pf_antecedentes
+  url: https://servicos.pf.gov.br/epol-sinic-publico/
+  observacoes: >-
+    Consulta pública da Polícia Federal, aberta a qualquer pessoa. Existe também
+    uma API "Antecedentes Criminais" no catálogo gov.br Conecta, que devolve a
+    informação de NADA CONSTA — mas o Conecta atende órgãos e entidades da
+    administração pública, e não escritórios; por isso a fonte aqui abre o site.
+
+- codigo: incra_ccir
+  nome: Certificado de Cadastro de Imóvel Rural
+  sigla: CCIR
+  orgao: INCRA
+  esfera: federal
+  validade_dias: 365
+  captcha: desconhecido
+  modo: manual
+  fonte: incra_ccir_site
+  fontes:
+    - incra_ccir_site
+    - incra_ccir_api_serpro
+  url: https://sncr.serpro.gov.br/ccir/emissao
+  observacoes: >-
+    Exigido de quem tem imóvel rural. O Serpro oferece a API Consulta CCIR, que
+    consulta os dados do certificado pelo CPF/CNPJ do titular ou pelo código do
+    imóvel — alternativa paga para quem tem volume.

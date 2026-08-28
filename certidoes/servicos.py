@@ -218,7 +218,30 @@ def resumo(s: Session, hoje: date | None = None) -> dict:
 # Solicitações
 # --------------------------------------------------------------------------- #
 
-def solicitar(s: Session, titular_id: int, tipo_id: int, origem: str = "manual") -> Solicitacao:
+def fontes_do_tipo(tipo: TipoCertidao) -> list[dict]:
+    """As maneiras de obter esta certidão, com o que distingue uma da outra."""
+    from .automacao.fontes import carregar_fonte
+
+    codigos = list(tipo.fontes or ([tipo.fonte] if tipo.fonte else []))
+    saida = []
+    for codigo in codigos:
+        fonte = carregar_fonte(codigo)
+        if fonte is None:
+            continue
+        api = fonte.api or {}
+        saida.append({
+            "codigo": codigo,
+            "nome": fonte.nome,
+            "tipo": fonte.tipo,
+            "custo": float(api.get("custo_por_emissao", 0) or 0),
+            "credencial": api.get("credencial") if fonte.tipo == "api" else None,
+            "padrao": codigo == tipo.fonte,
+        })
+    return saida
+
+
+def solicitar(s: Session, titular_id: int, tipo_id: int, origem: str = "manual",
+              fonte: str | None = None) -> Solicitacao:
     titular = s.get(Titular, titular_id)
     tipo = s.get(TipoCertidao, tipo_id)
     if titular is None or tipo is None:
@@ -227,8 +250,13 @@ def solicitar(s: Session, titular_id: int, tipo_id: int, origem: str = "manual")
     if existente := solicitacao_em_andamento(s, titular_id, tipo_id):
         return existente
 
+    if fonte:
+        disponiveis = {f["codigo"] for f in fontes_do_tipo(tipo)}
+        if fonte not in disponiveis:
+            raise ErroDeUso(f"A fonte '{fonte}' não está disponível para esta certidão.")
     solicitacao = Solicitacao(
-        titular_id=titular_id, tipo_certidao_id=tipo_id, origem=origem, registro=[]
+        titular_id=titular_id, tipo_certidao_id=tipo_id, origem=origem,
+        fonte=fonte or None, registro=[],
     )
     s.add(solicitacao)
     s.flush()

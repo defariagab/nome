@@ -122,6 +122,39 @@ Dois modificadores servem para os sites do mundo real:
 - **`opcional: true`** deixa o passo passar quando o elemento não está lá.
   Banner de cookies, aviso de manutenção, campo que só aparece às vezes.
 
+### O que existe de API, hoje
+
+Levantamento feito em 28/08/2026 nas fontes oficiais:
+
+| Certidão | API oficial? | Onde |
+|---|---|---|
+| **CND Federal** (RFB + PGFN) | **Sim, contratável** | [API Consulta CND](https://apicenter.estaleiro.serpro.gov.br/documentacao/consulta-cnd/), Serpro — [contratar](https://www.loja.serpro.gov.br/consultacnd) |
+| **CCIR** (imóvel rural, INCRA) | **Sim, contratável** | [API Consulta CCIR](https://apicenter.estaleiro.serpro.gov.br/documentacao/consulta-ccir/), Serpro |
+| Dívida Ativa da União (PGFN) | Sim, mas é consulta | API Dívida Ativa, Serpro — devolve dados da dívida, não a certidão |
+| Antecedentes Criminais (PF) | Existe, mas via Conecta | Catálogo gov.br Conecta, plataforma de integração da administração pública — não contratável por escritório |
+| **CNDT** (TST) | Não encontrei | — |
+| **CRF/FGTS** (Caixa) | Não encontrei | — |
+| **Certidão Unificada da JF** (CJF) | Não encontrei | — |
+| Estaduais e municipais | Não encontrei nada oficial | — |
+
+Ou seja: pela via oficial e contratável por um escritório, hoje há **duas** —
+CND Federal e CCIR. Existem empresas privadas que vendem APIs cobrindo mais
+órgãos; elas integram por conta própria, e vale ler os termos de cada uma antes
+de contratar. O sistema aceita qualquer uma delas: uma fonte de API é
+declarativa, e ligar um fornecedor novo não exige código.
+
+### Duas maneiras de obter a mesma certidão
+
+Uma certidão pode ter **mais de uma fonte**, e a escolha é do escritório, emissão
+a emissão. A CND Federal, por exemplo, tem duas:
+
+- **pelo site** (padrão): sem custo, com as limitações do portal;
+- **pela API contratada**: sem captcha, sem bloqueio, cobrada por consulta.
+
+No painel, o botão `⋯` ao lado de *Emitir* mostra os caminhos com o custo de
+cada um. A API é alternativa, nunca substituição — quando o volume não justifica
+o custo, o caminho gratuito continua ali.
+
 ### Fontes por API contratada
 
 Onde existe um serviço oficial, chamar a API é melhor do que operar o site: não

@@ -26,9 +26,13 @@ log = logging.getLogger("certidoes.fila")
 INTERVALO = 2.0
 
 
-def _fonte_para(tipo: TipoCertidao) -> Fonte:
-    """Usa a fonte do tipo; sem fonte, conduz o usuário até o site."""
-    if tipo.fonte and (fonte := carregar_fonte(tipo.fonte)):
+def _fonte_para(tipo: TipoCertidao, escolhida: str | None = None) -> Fonte:
+    """Usa a fonte escolhida na solicitação; sem escolha, a padrão do tipo.
+
+    Sem fonte nenhuma, conduz o usuário até o site do órgão.
+    """
+    codigo = escolhida or tipo.fonte
+    if codigo and (fonte := carregar_fonte(codigo)):
         return fonte
     passos = []
     if tipo.url:
@@ -153,7 +157,9 @@ class Fila:
                     break
                 if solicitacao.id in self._tarefas:
                     continue
-                fonte = _fonte_para(s.get(TipoCertidao, solicitacao.tipo_certidao_id))
+                fonte = _fonte_para(
+                    s.get(TipoCertidao, solicitacao.tipo_certidao_id), solicitacao.fonte
+                )
                 if fonte.paralelizavel:
                     escolhidas.append(solicitacao.id)
                     continue
@@ -184,6 +190,7 @@ class Fila:
             )
             segredos = servicos.credenciais_de_api(s)
             nome_tipo, tipo_id = tipo.nome, tipo.id
+            fonte_escolhida = solicitacao.fonte
 
         _anotar(solicitacao_id, "inicio", f"Iniciando {nome_tipo}.")
 
@@ -198,7 +205,7 @@ class Fila:
             return resposta
 
         with sessao() as s:
-            fonte = _fonte_para(s.get(TipoCertidao, tipo_id))
+            fonte = _fonte_para(s.get(TipoCertidao, tipo_id), fonte_escolhida)
 
         contexto = Contexto(
             solicitacao_id=solicitacao_id,

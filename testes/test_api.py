@@ -314,3 +314,26 @@ def test_periodo_do_relatorio_e_respeitado(cliente):
     relatorio = cliente.get("/api/relatorios/custos?de=2030-01-01&ate=2030-12-31").json()
     assert relatorio["total"] == 0
     assert relatorio["titulares"] == []
+
+
+def test_escolher_a_fonte_na_emissao(cliente):
+    tipos = {t["codigo"]: t for t in cliente.get("/api/tipos").json()}
+    cnd = tipos["rfb_pgfn_conjunta"]
+    assert [f["codigo"] for f in cnd["fontes"]] == ["rfb_pgfn_conjunta", "rfb_pgfn_api_serpro"]
+
+    titular = criar_titular(cliente, monitoramentos=[cnd["id"]]).json()
+    pedido = cliente.post("/api/solicitacoes", json={
+        "titular_id": titular["id"], "tipo_id": cnd["id"], "fonte": "rfb_pgfn_api_serpro",
+    })
+    assert pedido.status_code == 200
+    assert pedido.json()["fonte"] == "rfb_pgfn_api_serpro"
+
+
+def test_fonte_inexistente_e_recusada_com_mensagem(cliente):
+    tipos = {t["codigo"]: t for t in cliente.get("/api/tipos").json()}
+    titular = criar_titular(cliente).json()
+    resposta = cliente.post("/api/solicitacoes", json={
+        "titular_id": titular["id"], "tipo_id": tipos["cndt"]["id"], "fonte": "inventada",
+    })
+    assert resposta.status_code == 400
+    assert "não está disponível" in resposta.json()["erro"]

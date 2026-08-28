@@ -24,6 +24,12 @@ def titular(t: Titular, monitorados: list[int] | None = None) -> dict:
     }
 
 
+def _fontes(tc: TipoCertidao) -> list[dict]:
+    from ..servicos import fontes_do_tipo
+
+    return fontes_do_tipo(tc)
+
+
 def tipo(tc: TipoCertidao) -> dict:
     return {
         "id": tc.id,
@@ -40,6 +46,7 @@ def tipo(tc: TipoCertidao) -> dict:
         "captcha": tc.captcha.value,
         "modo": tc.modo.value,
         "fonte": tc.fonte,
+        "fontes": _fontes(tc),
         "url": tc.url,
         "verificado_em": tc.verificado_em.isoformat() if tc.verificado_em else None,
         "observacoes": tc.observacoes,
@@ -56,6 +63,7 @@ def solicitacao(s: Solicitacao, nome_titular: str = "", nome_tipo: str = "") -> 
         "tipo": nome_tipo,
         "estado": s.estado.value,
         "origem": s.origem,
+        "fonte": s.fonte,
         "tentativas": s.tentativas,
         "mensagem": s.mensagem,
         "diagnostico": s.diagnostico,

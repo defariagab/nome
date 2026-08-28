@@ -168,10 +168,23 @@ function desenharPainel() {
     if (linha.solicitacao_em_andamento) {
       acoes.push(el("span", { class: "pilula andamento" }, ROTULO_ESTADO[linha.estado_solicitacao] || "Em andamento"));
     } else {
+      const rotulo = linha.status === "ausente" ? "Emitir" : "Renovar";
+      const tipo = estado.tipos.find((x) => x.id === linha.tipo_id);
+      const alternativas = (tipo?.fontes || []).filter((f) => !f.padrao);
       acoes.push(el("button", {
         class: "botao secundario miudo",
         onclick: (evento) => emitir(linha, evento.target),
-      }, linha.status === "ausente" ? "Emitir" : "Renovar"));
+      }, rotulo));
+      if (alternativas.length) {
+        // Mais de um caminho para a mesma certidão: o site (grátis) e a API
+        // contratada (paga, sem captcha). A escolha é do escritório.
+        acoes.push(el("button", {
+          class: "botao secundario miudo",
+          style: "margin-left:6px",
+          title: "Escolher por onde emitir",
+          onclick: () => escolherFonte(linha, tipo),
+        }, "⋯"));
+      }
     }
     if (linha.certidao_id && linha.tem_arquivo) {
       acoes.push(el("a", {
@@ -247,12 +260,43 @@ function primeirosPassos() {
   ]);
 }
 
-async function emitir(linha, botao) {
+function descricaoDaFonte(fonte) {
+  if (fonte.tipo !== "api") return "opera o site do órgão, sem custo";
+  const preco = fonte.custo
+    ? `R$ ${fonte.custo.toFixed(2).replace(".", ",")} por emissão`
+    : "cobrada por consulta, conforme o contrato";
+  return `API contratada — sem captcha, ${preco}`;
+}
+
+function escolherFonte(linha, tipo) {
+  const opcoes = (tipo.fontes || []).map((fonte) =>
+    el("div", {
+      class: "escolha",
+      style: "cursor:pointer",
+      onclick: async () => { fecharModal(); await emitir(linha, null, fonte.codigo); },
+    }, [
+      el("div", {}, [
+        el("div", { class: "nome" }, fonte.nome + (fonte.padrao ? " (padrão)" : "")),
+        el("div", { class: "detalhe" }, descricaoDaFonte(fonte)),
+      ]),
+    ])
+  );
+  abrirModal(`Emitir ${linha.sigla} — por onde?`, el("div", {}, [
+    el("p", { class: "apoio" }, `${linha.tipo} — ${linha.titular}`),
+    el("div", { class: "escolhas" }, opcoes),
+    el("p", { class: "apoio", style: "margin-top:10px" },
+      "A fonte paga só funciona depois de cadastrar o token em Configurações › Credenciais de API."),
+  ]), [el("button", { class: "botao secundario", onclick: fecharModal }, "Cancelar")]);
+}
+
+async function emitir(linha, botao, fonte = null) {
   if (botao) { botao.disabled = true; botao.textContent = "Enviando..."; }
   try {
     await api("/api/solicitacoes", {
       method: "POST",
-      body: JSON.stringify({ titular_id: linha.titular_id, tipo_id: linha.tipo_id }),
+      body: JSON.stringify({
+        titular_id: linha.titular_id, tipo_id: linha.tipo_id, ...(fonte ? { fonte } : {}),
+      }),
     });
     avisar(`${linha.sigla} de ${linha.titular} entrou na fila.`, "bom");
     await carregar();
@@ -623,6 +667,8 @@ function desenharCatalogo() {
       tipo.verificado_em
         ? el("span", { class: "etiqueta" }, `fonte conferida em ${dataBR(tipo.verificado_em)}`)
         : el("span", { class: "etiqueta" }, "fonte não conferida"),
+      ...(tipo.fontes || []).filter((f) => f.tipo === "api")
+        .map((f) => el("span", { class: "etiqueta" }, "API disponível")),
     ].filter(Boolean);
     return el("tr", {}, [
       el("td", {}, [

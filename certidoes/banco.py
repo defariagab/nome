@@ -52,6 +52,8 @@ RENOMEACOES = [
 #: (tabela, coluna, definição) — colunas acrescentadas depois da primeira versão
 COLUNAS_NOVAS = [
     ("certidao", "custo", "FLOAT DEFAULT 0"),
+    ("tipo_certidao", "fontes", "JSON"),
+    ("solicitacao", "fonte", "VARCHAR(60)"),
 ]
 
 
