@@ -78,6 +78,12 @@ Em Solicitações, *Limpar encerradas* tira da lista o que falhou. No Acervo há
 *Excluir* em cada certidão (apaga o PDF junto). No cadastro do titular há
 *Excluir titular*, que mostra antes tudo o que será apagado.
 
+**Não vi que havia um captcha esperando.**
+A sala apita, avisa pelo sistema e marca o título da aba. As emissões dividem uma
+janela só do navegador, para não taparem o painel. Em Configurações dá para ligar
+o envio automático ao completar N caracteres (5, no caso do TST) e nem precisar
+teclar Enter.
+
 **Uma emissão falhou e não sei por quê.**
 Em Solicitações, clique em *Detalhes* para ver o passo a passo, ou em
 *Baixar diagnóstico* para exportar o histórico e enviar a quem dá suporte.

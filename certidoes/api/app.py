@@ -475,6 +475,8 @@ class Preferencias(BaseModel):
     padrao_nome_arquivo: str
     #: para onde vão as cópias que os órgãos enviam por e-mail
     email_escritorio: str = ""
+    #: enviar o captcha sozinho ao completar N caracteres (0 desliga)
+    captcha_envio_automatico: int = 0
 
 
 @app.get("/api/preferencias")
@@ -482,9 +484,11 @@ def ler_preferencias():
     with sessao() as s:
         padrao = servicos.preferencia(s, "padrao_nome_arquivo", nomeacao.PADRAO)
         email = servicos.preferencia(s, "email_escritorio")
+        automatico = servicos.preferencia(s, "captcha_envio_automatico", "0")
     return {
         "padrao_nome_arquivo": padrao,
         "email_escritorio": email,
+        "captcha_envio_automatico": int(automatico or 0),
         "padrao_do_sistema": nomeacao.PADRAO,
         "exemplo": nomeacao.exemplo(padrao),
         "campos": nomeacao.CAMPOS,
@@ -501,12 +505,15 @@ def salvar_preferencias(dados: Preferencias):
     email = dados.email_escritorio.strip()
     if email and ("@" not in email or " " in email):
         raise servicos.ErroDeUso("O e-mail do escritório não parece válido.")
+    automatico = max(0, min(int(dados.captcha_envio_automatico or 0), 12))
     with sessao() as s:
         servicos.definir_preferencia(s, "padrao_nome_arquivo", padrao)
         servicos.definir_preferencia(s, "email_escritorio", email)
+        servicos.definir_preferencia(s, "captcha_envio_automatico", str(automatico))
     return {
         "padrao_nome_arquivo": padrao,
         "email_escritorio": email,
+        "captcha_envio_automatico": automatico,
         "exemplo": nomeacao.exemplo(padrao),
     }
 

@@ -337,3 +337,21 @@ def test_fonte_inexistente_e_recusada_com_mensagem(cliente):
     })
     assert resposta.status_code == 400
     assert "não está disponível" in resposta.json()["erro"]
+
+
+def test_preferencia_de_envio_automatico_do_captcha(cliente):
+    salvo = cliente.put("/api/preferencias", json={
+        "padrao_nome_arquivo": "{sigla}_{documento}_{validade}",
+        "captcha_envio_automatico": 5,
+    }).json()
+    assert salvo["captcha_envio_automatico"] == 5
+    assert cliente.get("/api/preferencias").json()["captcha_envio_automatico"] == 5
+
+
+def test_envio_automatico_tem_limite_razoavel(cliente):
+    for pedido, esperado in ((0, 0), (99, 12), (-3, 0)):
+        salvo = cliente.put("/api/preferencias", json={
+            "padrao_nome_arquivo": "{sigla}_{documento}_{validade}",
+            "captcha_envio_automatico": pedido,
+        }).json()
+        assert salvo["captcha_envio_automatico"] == esperado

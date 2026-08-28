@@ -13,7 +13,7 @@ from .tipos import Contexto, ErroAutomacao, Fonte, Resultado
 TENTATIVAS_COM_REPETICAO = 3
 
 
-async def _uma_tentativa(fonte: Fonte, ctx: Contexto, escolhido: str) -> Resultado:
+async def _uma_tentativa(fonte: Fonte, ctx: Contexto, escolhido: str, navegador=None) -> Resultado:
     if fonte.tipo == "api" and escolhido != "simulador":
         from . import motor_api
 
@@ -25,14 +25,15 @@ async def _uma_tentativa(fonte: Fonte, ctx: Contexto, escolhido: str) -> Resulta
         return await motor_simulador.executar(fonte, ctx)
     from . import motor_navegador
 
-    return await motor_navegador.executar(fonte, ctx)
+    return await motor_navegador.executar(fonte, ctx, navegador=navegador)
 
 
-async def executar(fonte: Fonte, ctx: Contexto, motor: str | None = None) -> Resultado:
+async def executar(fonte: Fonte, ctx: Contexto, motor: str | None = None,
+                   navegador=None) -> Resultado:
     escolhido = motor or config.motor
     for tentativa in range(1, TENTATIVAS_COM_REPETICAO + 1):
         try:
-            return await _uma_tentativa(fonte, ctx, escolhido)
+            return await _uma_tentativa(fonte, ctx, escolhido, navegador)
         except ErroAutomacao as erro:
             if not erro.repetir or tentativa == TENTATIVAS_COM_REPETICAO:
                 raise

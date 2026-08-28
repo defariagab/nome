@@ -13,7 +13,7 @@ import base64
 
 import pytest
 
-from certidoes.automacao.motor import executar
+from certidoes.automacao.motor import executar  # noqa: F401
 from certidoes.automacao.tipos import Contexto, ErroAutomacao, Fonte, Passo
 from certidoes.modelos import SituacaoCertidao
 from testes.site_falso import SiteFalso
@@ -206,3 +206,41 @@ def test_download_em_aba_nova_tambem_e_capturado():
 
     assert resultado.sucesso
     assert resultado.numero == "7777/2026"
+
+
+@pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
+def test_emissoes_simultaneas_dividem_o_mesmo_navegador():
+    """Uma janela, várias abas: quatro janelas escondem a sala de captchas."""
+    from certidoes.automacao.motor_navegador import Navegador
+
+    fonte = Fonte(
+        codigo="teste", nome="Certidão de teste", url="{url}", resultado="download",
+        passos=[
+            Passo("abrir", {"url": "{url}"}),
+            Passo("preencher", {"seletor": "#doc", "valor": "{documento}"}),
+            Passo("captcha_imagem", {"seletor": "#cap", "campo": "#resp"}),
+            Passo("clicar", {"seletor": "#ok"}),
+            Passo("aguardar_download", {"timeout": 30, "falhar_se_texto": [
+                {"texto": "nao conferem", "mensagem": "Captcha incorreto.", "repetir": True},
+            ]}),
+        ],
+    )
+
+    async def cenario():
+        from testes import site_falso
+
+        with SiteFalso() as site:
+            async with Navegador(visivel=False) as navegador:
+                contextos = [
+                    _contexto(site.url, [], lambda: site_falso.RESPOSTA_CAPTCHA["valor"])
+                    for _ in range(2)
+                ]
+                resultados = await asyncio.gather(*[
+                    executar(fonte, c, motor="navegador", navegador=navegador) for c in contextos
+                ])
+                abas = len(navegador._contexto.pages)
+                return resultados, abas
+
+    resultados, abas = asyncio.run(cenario())
+    assert all(r.sucesso for r in resultados)
+    assert abas >= 2, "cada emissão deve ter a própria aba dentro do mesmo navegador"

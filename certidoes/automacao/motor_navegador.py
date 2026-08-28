@@ -118,14 +118,20 @@ class Navegador:
     def _escutar_downloads(self, pagina) -> None:
         pagina.on("download", lambda d: self._downloads.put_nowait(d))
 
-    async def nova_pagina(self):
+    async def nova_pagina(self, propria: bool = False):
+        """Uma página para trabalhar.
+
+        `propria=True` abre uma aba nova, para várias emissões dividirem o
+        mesmo navegador em vez de abrirem uma janela cada.
+        """
         # Vários sites entregam o arquivo numa aba nova. Escutamos todas as
         # abas do navegador para que o download não se perca em nenhuma delas.
         self._contexto.on("page", self._escutar_downloads)
         for pagina_existente in self._contexto.pages:
             self._escutar_downloads(pagina_existente)
-        pagina = self._contexto.pages[0] if self._contexto.pages else await self._contexto.new_page()
-        return pagina
+        if propria or not self._contexto.pages:
+            return await self._contexto.new_page()
+        return self._contexto.pages[0]
 
     async def proximo_download(self, timeout: int):
         return await asyncio.wait_for(self._downloads.get(), timeout=timeout)
@@ -160,8 +166,9 @@ async def _conferir_erros(pagina, passo, ctx: Contexto) -> None:
             raise ErroAutomacao(regra.get("mensagem", alvo), repetir=bool(regra.get("repetir")))
 
 
-async def _executar_passos(fonte: Fonte, ctx: Contexto, navegador: Navegador) -> Resultado:
-    pagina = await navegador.nova_pagina()
+async def _executar_passos(fonte: Fonte, ctx: Contexto, navegador: Navegador,
+                           aba_propria: bool = False) -> Resultado:
+    pagina = await navegador.nova_pagina(propria=aba_propria)
     documento: bytes | None = None
     texto_pagina = ""
     aguarda_anexo = fonte.resultado == "anexo_manual"
@@ -398,13 +405,27 @@ async def _sem_navegador(fonte: Fonte, ctx: Contexto) -> Resultado:
     )
 
 
-async def executar(fonte: Fonte, ctx: Contexto) -> Resultado:
-    """Uma tentativa completa da fonte, em um navegador limpo."""
+async def executar(fonte: Fonte, ctx: Contexto, navegador: Navegador | None = None) -> Resultado:
+    """Uma tentativa completa da fonte.
+
+    Com um navegador compartilhado, a emissão roda numa aba dele. Isso importa:
+    quatro emissões abrindo quatro janelas pulam na frente do painel e deixam a
+    sala de captchas inalcançável, que é o pior dos dois mundos — a automação
+    espera uma resposta que a pessoa não consegue nem ver que foi pedida.
+    """
     if not fonte.exige_navegador:
         return await _sem_navegador(fonte, ctx)
-    async with Navegador(visivel=ctx.visivel, pasta_sessao=ctx.pasta_sessao) as navegador:
+    if navegador is not None:
+        return await _tentar(fonte, ctx, navegador, aba_propria=True)
+    async with Navegador(visivel=ctx.visivel, pasta_sessao=ctx.pasta_sessao) as proprio:
+        return await _tentar(fonte, ctx, proprio, aba_propria=False)
+
+
+async def _tentar(fonte: Fonte, ctx: Contexto, navegador: Navegador,
+                  aba_propria: bool) -> Resultado:
+    if True:
         try:
-            return await _executar_passos(fonte, ctx, navegador)
+            return await _executar_passos(fonte, ctx, navegador, aba_propria=aba_propria)
         except ErroAutomacao:
             raise
         except Exception as erro:

@@ -84,6 +84,10 @@ class Fila:
         self.limite = limite or config.paralelismo
         self._exclusivas: set[int] = set()
         self._tarefas: dict[int, asyncio.Task] = {}
+        # Um navegador só, compartilhado pelas emissões que rodam juntas: elas
+        # abrem abas nele em vez de uma janela cada.
+        self._navegador = None
+        self._porta_do_navegador = asyncio.Lock()
         self._laco: asyncio.Task | None = None
         self._parar = asyncio.Event()
 
@@ -93,8 +97,26 @@ class Fila:
             self._parar.clear()
             self._laco = asyncio.create_task(self._rodar(), name="fila-certidoes")
 
+    async def _navegador_compartilhado(self):
+        from .automacao.motor_navegador import Navegador
+
+        async with self._porta_do_navegador:
+            if self._navegador is None:
+                self._navegador = await Navegador(visivel=config.navegador_visivel).__aenter__()
+            return self._navegador
+
+    async def _fechar_navegador(self) -> None:
+        async with self._porta_do_navegador:
+            if self._navegador is not None:
+                navegador, self._navegador = self._navegador, None
+                try:
+                    await navegador.__aexit__(None, None, None)
+                except Exception:  # pragma: no cover - fechamento é melhor esforço
+                    pass
+
     async def parar(self) -> None:
         self._parar.set()
+        await self._fechar_navegador()
         for tarefa in list(self._tarefas.values()):
             tarefa.cancel()
         if self._laco:
@@ -112,6 +134,10 @@ class Fila:
                         )
             except Exception:  # pragma: no cover - o laço nunca pode morrer
                 log.exception("Falha no laço da fila")
+            # Sem nada em andamento, o navegador compartilhado não precisa
+            # continuar aberto ocupando a tela.
+            if not self._tarefas and self._navegador is not None:
+                await self._fechar_navegador()
             await asyncio.sleep(INTERVALO)
 
     def _recolher(self) -> None:
@@ -219,8 +245,17 @@ class Fila:
             segredos=segredos,
         )
 
+        # Emissões que dividem o navegador não abrem janela própria; as que
+        # precisam da pessoa na janela (login gov.br, captcha interativo, perfil
+        # guardado) ganham um navegador só delas.
+        compartilhado = None
+        if (self.motor or config.motor) != "simulador" and fonte.exige_navegador:
+            if fonte.paralelizavel and not fonte.perfil:
+                compartilhado = await self._navegador_compartilhado()
+
         try:
-            resultado = await executar(fonte, contexto, motor=self.motor)
+            resultado = await executar(fonte, contexto, motor=self.motor,
+                                       navegador=compartilhado)
         except desafios.DesafioExpirado as erro:
             _anotar(solicitacao_id, "cancelado", str(erro))
             _mudar_estado(solicitacao_id, EstadoSolicitacao.FALHOU, str(erro))

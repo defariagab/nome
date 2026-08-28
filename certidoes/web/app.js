@@ -8,6 +8,8 @@ const estado = {
   painel: [],
   desafioAtual: null,
   desafios: [],
+  envioAutomatico: 0,
+  tituloOriginal: "",
   desafiosAdiados: new Set(),
   resumo: null,
 };
@@ -721,6 +723,39 @@ function formularioTipo(tipo) {
   ]);
 }
 
+/* --------------------------------------------------- chamar a atenção */
+/* A janela do navegador que a automação usa pode estar na frente do painel.
+   Sem um aviso audível e visível, a pessoa não descobre que há um captcha
+   esperando — e a emissão fica parada até expirar. */
+
+function apitar() {
+  try {
+    const audio = new (window.AudioContext || window.webkitAudioContext)();
+    const oscilador = audio.createOscillator();
+    const volume = audio.createGain();
+    oscilador.connect(volume); volume.connect(audio.destination);
+    oscilador.frequency.value = 880;
+    volume.gain.setValueAtTime(0.06, audio.currentTime);
+    volume.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.25);
+    oscilador.start(); oscilador.stop(audio.currentTime + 0.25);
+  } catch { /* sem áudio disponível: o aviso visual continua */ }
+}
+
+function notificar(quantos) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    new Notification(quantos > 1 ? `${quantos} captchas aguardando` : "Captcha aguardando", {
+      body: "Abra o painel de certidões para responder.",
+      tag: "certidoes-captcha",
+    });
+  } catch { /* alguns navegadores recusam fora de contexto seguro */ }
+}
+
+function marcarTitulo(quantos) {
+  if (!estado.tituloOriginal) estado.tituloOriginal = document.title;
+  document.title = quantos ? `(${quantos}) Captcha aguardando — Certidões` : estado.tituloOriginal;
+}
+
 /* ------------------------------------------------------ sala de captchas */
 /* Vários pedidos de ajuda chegam juntos de propósito: as emissões com captcha
    de letras rodam em paralelo, então a pessoa responde uma imagem atrás da
@@ -741,8 +776,16 @@ async function atualizarDesafios() {
   for (const id of estado.desafiosAdiados) {
     if (!idsAbertos.has(id)) estado.desafiosAdiados.delete(id);
   }
+  const antes = new Set(estado.desafios.map((d) => d.id));
   estado.desafios = abertos.filter((d) => !estado.desafiosAdiados.has(d.id));
+  marcarTitulo(estado.desafios.length);
   if (!estado.desafios.length) return fecharSala();
+
+  const novos = estado.desafios.filter((d) => !antes.has(d.id));
+  if (novos.length) {
+    apitar();
+    if (document.hidden) notificar(estado.desafios.length);
+  }
   if (!salaAberta) salaAberta = true;
   desenharSala();
 }
@@ -751,6 +794,7 @@ function fecharSala() {
   if (!salaAberta) return;
   salaAberta = false;
   estado.desafioAtual = null;
+  marcarTitulo(0);
   $("#cortina-desafio").classList.add("oculto");
   carregar();
 }
@@ -764,11 +808,22 @@ function desenharSala() {
   const digitar = PRECISA_DIGITAR.has(desafio.tipo);
   const restantes = estado.desafios.length;
   const entrada = el("input", {
-    type: "text", placeholder: "Digite e tecle Enter", autocomplete: "off", spellcheck: "false",
+    type: "text", placeholder: "Digite e tecle Enter", autocomplete: "off",
+    spellcheck: "false", autocapitalize: "off",
+    style: "font-size:20px; letter-spacing:3px; text-align:center; padding:12px",
   });
   entrada.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); enviarResposta(entrada.value.trim()); }
   });
+  // Envio automático ao completar o tamanho esperado: economiza uma tecla por
+  // captcha, o que pesa quando são dezenas seguidos.
+  if (estado.envioAutomatico > 0) {
+    entrada.addEventListener("input", () => {
+      if (entrada.value.trim().length >= estado.envioAutomatico) {
+        enviarResposta(entrada.value.trim());
+      }
+    });
+  }
 
   $("#desafio-titulo").textContent = digitar
     ? (restantes > 1 ? `Captchas — faltam ${restantes}` : "Digite o captcha")
@@ -778,7 +833,11 @@ function desenharSala() {
     el("p", { class: "apoio" }, `${desafio.certidao} — ${desafio.titular}`),
     el("div", { class: "instrucao" }, desafio.instrucao),
     desafio.imagem
-      ? el("div", { class: "captcha-caixa" }, el("img", { src: desafio.imagem, alt: "Imagem do captcha" }))
+      ? el("div", { class: "captcha-caixa" },
+          el("img", {
+            src: desafio.imagem, alt: "Imagem do captcha",
+            style: "width:100%; max-width:360px; image-rendering:crisp-edges",
+          }))
       : null,
     digitar ? entrada : null,
     restantes > 1
@@ -791,6 +850,8 @@ function desenharSala() {
     ? (restantes > 1 ? "Enviar e próximo" : "Enviar")
     : "Já resolvi, pode continuar";
   $("#cortina-desafio").classList.remove("oculto");
+  const proximo = estado.desafios[1];
+  if (proximo?.imagem) { const p = new Image(); p.src = proximo.imagem; }
   if (!mesmo || document.activeElement !== entrada) setTimeout(() => entrada.focus(), 30);
 
   $("#desafio-enviar").onclick = () => enviarResposta(digitar ? entrada.value.trim() : "ok");
@@ -836,6 +897,10 @@ async function desenharConfiguracoes() {
     type: "email", value: preferencias.email_escritorio || "",
     placeholder: "contato@seuescritorio.adv.br",
   });
+  const entradaAutomatico = el("input", {
+    type: "number", min: "0", max: "12",
+    value: String(preferencias.captcha_envio_automatico || 0),
+  });
   const previa = el("code", {}, preferencias.exemplo);
 
   entrada.addEventListener("input", () => {
@@ -849,9 +914,11 @@ async function desenharConfiguracoes() {
       body: JSON.stringify({
         padrao_nome_arquivo: entrada.value,
         email_escritorio: entradaEmail.value,
+        captcha_envio_automatico: Number(entradaAutomatico.value) || 0,
       }),
     });
     previa.textContent = r.exemplo;
+    estado.envioAutomatico = Number(entradaAutomatico.value) || 0;
     avisar("Configurações salvas. Valem para as próximas certidões.", "bom");
   });
 
@@ -1046,6 +1113,12 @@ async function desenharConfiguracoes() {
         el("div", { class: "campo" }, [el("label", {}, "Fica assim"), el("div", { class: "registro" }, previa)]),
         el("div", { class: "campo" }, [el("label", {}, "Campos disponíveis"), campos]),
         el("div", { class: "campo" }, [
+          el("label", {}, ["Enviar o captcha sozinho ao completar quantos caracteres ",
+            el("span", { class: "dica" },
+              "— 0 desliga. O captcha do TST tem 5; assim você não precisa nem teclar Enter")]),
+          entradaAutomatico,
+        ]),
+        el("div", { class: "campo" }, [
           el("label", {}, ["E-mail do escritório ",
             el("span", { class: "dica" },
               "— alguns órgãos mandam cópia da certidão por e-mail; em branco, vai para o e-mail do titular")]),
@@ -1207,6 +1280,11 @@ async function carregar() {
   desenharSolicitacoes();  // também atualiza o contador da barra lateral
   if (estado.pagina === "acervo") desenharAcervo();
 
+  try {
+    const preferencias = await api("/api/preferencias");
+    estado.envioAutomatico = preferencias.captcha_envio_automatico || 0;
+  } catch { /* preferências indisponíveis: a sala segue com Enter */ }
+
   const aviso = $("#aviso-modo");
   aviso.classList.toggle("oculto", !resumo.modo_demonstracao);
   if (resumo.modo_demonstracao) {
@@ -1253,6 +1331,13 @@ document.addEventListener("DOMContentLoaded", () => {
     } finally { e.target.disabled = false; }
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") fecharModal(); });
+
+  if ("Notification" in window && Notification.permission === "default") {
+    document.addEventListener("click", function pedir() {
+      document.removeEventListener("click", pedir);
+      Notification.requestPermission().catch(() => {});
+    }, { once: true });
+  }
 
   irPara(location.hash.slice(1) || "painel");
   carregar();
