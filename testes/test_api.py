@@ -253,3 +253,64 @@ def test_desativar_titular_continua_sendo_o_padrao(cliente):
     assert cliente.delete(f"/api/titulares/{titular['id']}").status_code == 200
     assert cliente.get("/api/titulares").json() == []                      # some da lista
     assert cliente.get("/api/titulares?incluir_inativos=true").json() != []  # mas não foi apagado
+
+
+def test_credencial_de_api_e_guardada_cifrada(cliente):
+    from sqlalchemy import select
+
+    from certidoes.banco import sessao
+    from certidoes.modelos import Credencial
+
+    assert cliente.put("/api/credenciais",
+                       json={"rotulo": "serpro_cnd", "segredo": "token-secreto"}).status_code == 200
+
+    listadas = cliente.get("/api/credenciais").json()
+    assert listadas[0]["rotulo"] == "serpro_cnd"
+    assert "token-secreto" not in str(listadas)   # o segredo nunca volta pela API
+
+    with sessao() as s:
+        guardada = s.scalar(select(Credencial).where(Credencial.rotulo == "serpro_cnd"))
+        assert "token-secreto" not in (guardada.segredo or "")   # nem fica em texto puro
+        from certidoes.seguranca import decifrar
+        assert decifrar(guardada.segredo) == "token-secreto"
+
+    assert cliente.delete("/api/credenciais/serpro_cnd").status_code == 200
+    assert cliente.get("/api/credenciais").json() == []
+
+
+def test_relatorio_de_custos_para_repassar_ao_cliente(cliente):
+    from datetime import date
+
+    from certidoes.banco import sessao
+    from certidoes import servicos
+    from sqlalchemy import select
+    from certidoes.modelos import TipoCertidao
+
+    titular = criar_titular(cliente).json()
+    with sessao() as s:
+        cndt = s.scalar(select(TipoCertidao).where(TipoCertidao.codigo == "cndt"))
+        for custo in (0.87, 1.13):
+            solicitacao = servicos.solicitar(s, titular["id"], cndt.id)
+            servicos.guardar_resultado(
+                s, solicitacao, documento=b"%PDF-1.4 x",
+                emitida_em=date(2026, 8, 28), valida_ate=date(2027, 2, 24),
+                custo=custo, origem="api",
+            )
+            s.flush()
+
+    relatorio = cliente.get("/api/relatorios/custos").json()
+    assert relatorio["total"] == 2.0
+    assert relatorio["titulares"][0]["emissoes"] == 2
+    assert relatorio["titulares"][0]["titular"] == "Empresa Exemplo Ltda"
+
+    csv = cliente.get("/api/relatorios/custos?formato=csv")
+    assert csv.status_code == 200
+    texto = csv.content.decode("utf-8-sig")
+    assert "titular;documento;data;certidao;custo" in texto
+    assert "TOTAL;;;;2,00" in texto
+
+
+def test_periodo_do_relatorio_e_respeitado(cliente):
+    relatorio = cliente.get("/api/relatorios/custos?de=2030-01-01&ate=2030-12-31").json()
+    assert relatorio["total"] == 0
+    assert relatorio["titulares"] == []

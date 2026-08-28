@@ -182,6 +182,7 @@ class Fila:
             variaveis = servicos.variaveis_do_contexto(
                 titular, tipo, servicos.preferencia(s, "email_escritorio")
             )
+            segredos = servicos.credenciais_de_api(s)
             nome_tipo, tipo_id = tipo.nome, tipo.id
 
         _anotar(solicitacao_id, "inicio", f"Iniciando {nome_tipo}.")
@@ -208,6 +209,7 @@ class Fila:
             # segue emitindo sem repetir a autenticação.
             pasta_sessao=str(config.pasta_sessoes / fonte.perfil) if fonte.perfil else None,
             visivel=config.navegador_visivel,
+            segredos=segredos,
         )
 
         try:
@@ -253,6 +255,8 @@ class Fila:
                 codigo_verificacao=resultado.codigo_verificacao,
                 situacao=resultado.situacao,
                 extensao=resultado.extensao,
+                custo=resultado.custo,
+                origem="api" if resultado.custo else "automacao",
             )
             solicitacao.estado = EstadoSolicitacao.CONCLUIDA
             solicitacao.concluida_em = agora()

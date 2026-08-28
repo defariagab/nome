@@ -23,6 +23,8 @@ def _converter(bruto: dict) -> Fonte:
         verificado_em=bruto.get("verificado_em"),
         perfil=bruto.get("perfil"),
         ao_falhar=bruto.get("ao_falhar", "falhar"),
+        tipo=bruto.get("tipo", "navegador"),
+        api=bruto.get("api", {}) or {},
         _paralelizavel=bruto.get("paralelizavel", True),
     )
 

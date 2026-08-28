@@ -870,7 +870,113 @@ async function desenharConfiguracoes() {
     }
   });
 
+  /* --- credenciais de API contratada --- */
+  const listaCredenciais = el("div", {});
+  const rotuloCredencial = el("input", { type: "text", placeholder: "serpro_cnd" });
+  const segredoCredencial = el("input", { type: "password", placeholder: "token fornecido no contrato" });
+
+  async function desenharCredenciais() {
+    const credenciais = await api("/api/credenciais");
+    listaCredenciais.replaceChildren(
+      credenciais.length
+        ? el("table", {}, el("tbody", {}, credenciais.map((c) =>
+            el("tr", {}, [
+              el("td", {}, el("code", {}, c.rotulo)),
+              el("td", { class: "secundaria" }, c.segredo || "—"),
+              el("td", { class: "acoes" }, el("button", {
+                class: "botao secundario miudo",
+                onclick: async () => {
+                  const certeza = await confirmar("Remover esta credencial?",
+                    `As emissões que usam "${c.rotulo}" voltam a pedir o token.`, "Remover");
+                  if (!certeza) return;
+                  await api(`/api/credenciais/${encodeURIComponent(c.rotulo)}`, { method: "DELETE" });
+                  await desenharCredenciais();
+                },
+              }, "Remover")),
+            ])
+          )))
+        : el("p", { class: "apoio" }, "Nenhuma credencial cadastrada.")
+    );
+  }
+  desenharCredenciais();
+
+  const salvarCredencial = el("button", { class: "botao primario" }, "Guardar credencial");
+  salvarCredencial.addEventListener("click", async () => {
+    await api("/api/credenciais", {
+      method: "PUT",
+      body: JSON.stringify({ rotulo: rotuloCredencial.value, segredo: segredoCredencial.value }),
+    });
+    segredoCredencial.value = "";
+    avisar("Credencial guardada, cifrada.", "bom");
+    await desenharCredenciais();
+  });
+
+  /* --- custo das emissões pagas --- */
+  const de = el("input", { type: "date" });
+  const ate = el("input", { type: "date" });
+  const resultadoCustos = el("div", {});
+  const verCustos = el("button", { class: "botao secundario" }, "Ver custos");
+  verCustos.addEventListener("click", async () => {
+    const parametros = new URLSearchParams();
+    if (de.value) parametros.set("de", de.value);
+    if (ate.value) parametros.set("ate", ate.value);
+    const r = await api(`/api/relatorios/custos?${parametros}`);
+    resultadoCustos.replaceChildren(
+      el("p", {}, `Total no período: R$ ${r.total.toFixed(2).replace(".", ",")}`),
+      r.titulares.length
+        ? el("table", {}, [
+            el("thead", {}, el("tr", {}, ["Titular", "Emissões", "Custo"].map((x) => el("th", {}, x)))),
+            el("tbody", {}, r.titulares.map((linha) =>
+              el("tr", {}, [
+                el("td", {}, [el("div", { class: "principal" }, linha.titular),
+                              el("div", { class: "secundaria" }, linha.documento)]),
+                el("td", {}, String(linha.emissoes)),
+                el("td", {}, `R$ ${linha.total.toFixed(2).replace(".", ",")}`),
+              ])
+            )),
+          ])
+        : el("p", { class: "apoio" }, "Nenhuma emissão paga no período."),
+      el("a", {
+        class: "botao secundario miudo",
+        href: `/api/relatorios/custos?${parametros}&formato=csv`,
+        style: "text-decoration:none; display:inline-block; margin-top:10px",
+      }, "Baixar planilha (CSV)"),
+    );
+  });
+
   $("#conteudo-configuracoes").replaceChildren(
+    el("div", { class: "bloco" }, [
+      el("div", { class: "bloco-cabecalho" }, el("h2", {}, "Credenciais de API")),
+      el("div", { style: "padding:18px" }, [
+        el("p", { class: "apoio" },
+          "Algumas certidões podem ser emitidas por API contratada, sem captcha e sem bloqueio — " +
+          "é o caso da CND Federal pela API do Serpro. O token fica guardado cifrado e nunca " +
+          "é mostrado de volta."),
+        listaCredenciais,
+        el("div", { class: "linha", style: "margin-top:12px" }, [
+          el("div", { class: "campo" }, [
+            el("label", {}, ["Rótulo ", el("span", { class: "dica" }, "— o nome que a fonte espera")]),
+            rotuloCredencial,
+          ]),
+          el("div", { class: "campo" }, [el("label", {}, "Token"), segredoCredencial]),
+        ]),
+        salvarCredencial,
+      ]),
+    ]),
+    el("div", { class: "bloco" }, [
+      el("div", { class: "bloco-cabecalho" }, el("h2", {}, "Custo das emissões")),
+      el("div", { style: "padding:18px" }, [
+        el("p", { class: "apoio" },
+          "Emissões por API contratada são cobradas por consulta. Aqui está quanto cada titular " +
+          "custou no período — é a base para repassar ao cliente."),
+        el("div", { class: "linha" }, [
+          el("div", { class: "campo" }, [el("label", {}, "De"), de]),
+          el("div", { class: "campo" }, [el("label", {}, "Até"), ate]),
+        ]),
+        verCustos,
+        resultadoCustos,
+      ]),
+    ]),
     el("div", { class: "bloco" }, [
       el("div", { class: "bloco-cabecalho" }, el("h2", {}, "Conferir as fontes")),
       el("div", { style: "padding:18px" }, [

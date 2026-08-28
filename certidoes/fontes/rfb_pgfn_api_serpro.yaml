@@ -1,0 +1,42 @@
+codigo: rfb_pgfn_api_serpro
+nome: CND Federal — API Consulta CND (Serpro)
+tipo: api
+# Caminho oficial e pago para a certidão conjunta RFB/PGFN, sem captcha e sem
+# bloqueio a automação. Confirmado na documentação do Serpro em 28/08/2026:
+#   - é uma API HTTP REST que consulta o Sistema CND para PJ, PF e imóvel rural;
+#   - a autenticação é por bearer token;
+#   - as chamadas são bilhetadas e cobradas;
+#   - há um ambiente de demonstração gratuito para testar antes de contratar.
+#   https://apicenter.estaleiro.serpro.gov.br/documentacao/consulta-cnd/
+#
+# COMO ATIVAR
+# 1. Contrate em https://www.loja.serpro.gov.br/consultacnd (ou teste primeiro
+#    no ambiente de demonstração da documentação).
+# 2. Cadastre o token em Configurações › Credenciais de API, com o rótulo
+#    `serpro_cnd`.
+# 3. Confira abaixo o endereço, os parâmetros e os campos da resposta contra a
+#    "Referência da API" que vem com o seu contrato, e ajuste o que divergir —
+#    são nomes de campo, não código. Depois marque este tipo como ativo no
+#    Catálogo, no lugar da fonte que abre o navegador.
+# 4. Ajuste `custo_por_emissao` para o preço do seu contrato: é ele que alimenta
+#    o relatório de custos por cliente.
+url: https://gateway.apiserpro.serpro.gov.br/consulta-cnd/api/v1/certidao
+api:
+  endereco: "{url}"
+  metodo: GET
+  credencial: serpro_cnd
+  exige_token: true
+  autorizacao: "Bearer {token}"
+  parametros:
+    ni: "{documento}"
+  custo_por_emissao: 0.0
+  resposta:
+    # Caminhos dentro do JSON de resposta. Confirme os nomes na referência do
+    # seu contrato: o motor lê qualquer estrutura, mas precisa saber onde olhar.
+    documento: dados.certidao
+    numero: dados.numeroCertidao
+    emissao: dados.dataEmissao
+    validade: dados.dataValidade
+    situacao: dados.tipoCertidao
+    erro: mensagem
+    formato_de_data: "%d/%m/%Y"

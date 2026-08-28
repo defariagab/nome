@@ -12,7 +12,7 @@ from . import arquivos, nomeacao, validacao
 from .automacao.extracao import analisar
 from .documento import apenas_digitos, formatar, tipo_pessoa, valido
 from .modelos import (  # noqa: F401  (Titular é reexportado para conveniência)
-    Certidao, Configuracao, Desafio, EstadoDesafio, EstadoSolicitacao, Evento,
+    Certidao, Configuracao, Credencial, Desafio, EstadoDesafio, EstadoSolicitacao, Evento,
     Monitoramento, SituacaoCertidao, Solicitacao, TipoCertidao, TipoPessoa, Titular, agora,
 )
 from .validade import Status, avaliar, calcular_validade
@@ -275,6 +275,7 @@ def guardar_resultado(
     situacao: SituacaoCertidao = SituacaoCertidao.NAO_IDENTIFICADA,
     origem: str = "automacao",
     extensao: str = "pdf",
+    custo: float = 0.0,
 ) -> Certidao:
     """Arquiva o PDF e cria a certidão, marcando a anterior como substituída."""
     titular = s.get(Titular, solicitacao.titular_id)
@@ -316,6 +317,7 @@ def guardar_resultado(
         arquivo=caminho,
         arquivo_hash=digest,
         origem=origem,
+        custo=custo,
         solicitacao_id=solicitacao.id,
     )
     s.add(certidao)
@@ -358,6 +360,70 @@ def anexar_documento(s: Session, solicitacao_id: int, dados: bytes,
     solicitacao.concluida_em = agora()
     solicitacao.mensagem = "Documento anexado pelo usuário."
     return certidao
+
+
+def credenciais_de_api(s: Session) -> dict[str, str]:
+    """Tokens de API já decifrados, por rótulo, para as fontes que precisam."""
+    from .seguranca import SegredoIndisponivel, decifrar
+
+    segredos: dict[str, str] = {}
+    for credencial in s.scalars(select(Credencial).where(Credencial.tipo == "api")):
+        try:
+            if valor := decifrar(credencial.segredo):
+                segredos[credencial.rotulo] = valor
+        except SegredoIndisponivel:
+            continue  # credencial ilegível não derruba as demais emissões
+    return segredos
+
+
+def salvar_credencial_de_api(s: Session, rotulo: str, segredo: str) -> None:
+    """Guarda o token cifrado. Nunca é devolvido pela API depois."""
+    from .seguranca import cifrar
+
+    rotulo = (rotulo or "").strip()
+    if not rotulo:
+        raise ErroDeUso("Informe o rótulo da credencial (ex.: serpro_cnd).")
+    if not (segredo or "").strip():
+        raise ErroDeUso("Informe o token da API.")
+    existente = s.scalar(
+        select(Credencial).where(Credencial.tipo == "api", Credencial.rotulo == rotulo)
+    )
+    if existente is None:
+        existente = Credencial(rotulo=rotulo, tipo="api")
+        s.add(existente)
+    existente.segredo = cifrar(segredo.strip())
+    registrar_evento(s, "credencial", existente.id, "salva", f"Credencial de API {rotulo} salva.")
+
+
+def custos_por_titular(s: Session, de: date | None = None, ate: date | None = None) -> list[dict]:
+    """Quanto cada titular custou em emissões pagas, para repassar ao cliente."""
+    consulta = select(Certidao).where(Certidao.custo > 0).order_by(Certidao.emitida_em)
+    if de:
+        consulta = consulta.where(Certidao.emitida_em >= de)
+    if ate:
+        consulta = consulta.where(Certidao.emitida_em <= ate)
+
+    por_titular: dict[int, dict] = {}
+    for certidao in s.scalars(consulta):
+        titular = s.get(Titular, certidao.titular_id)
+        tipo = s.get(TipoCertidao, certidao.tipo_certidao_id)
+        linha = por_titular.setdefault(certidao.titular_id, {
+            "titular_id": certidao.titular_id,
+            "titular": titular.nome if titular else "(removido)",
+            "documento": formatar(titular.documento) if titular else "",
+            "emissoes": 0,
+            "total": 0.0,
+            "itens": [],
+        })
+        linha["emissoes"] += 1
+        linha["total"] = round(linha["total"] + float(certidao.custo), 2)
+        linha["itens"].append({
+            "data": certidao.emitida_em.isoformat(),
+            "certidao": tipo.nome if tipo else "",
+            "sigla": (tipo.sigla or tipo.codigo.upper()) if tipo else "",
+            "custo": round(float(certidao.custo), 2),
+        })
+    return sorted(por_titular.values(), key=lambda linha: linha["titular"].lower())
 
 
 # --------------------------------------------------------------------------- #

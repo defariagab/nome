@@ -43,6 +43,10 @@ class Fonte:
     nome: str
     url: str
     passos: list[Passo]
+    #: "navegador" opera o site; "api" chama um serviço contratado
+    tipo: str = "navegador"
+    #: configuração da chamada, quando `tipo: api`
+    api: dict = field(default_factory=dict)
     resultado: str = "download"          # download | pagina_pdf | anexo_manual
     verificado_em: date | None = None
     #: o que fazer quando um passo não encontra o que esperava no site:
@@ -70,6 +74,8 @@ class Fonte:
     @property
     def exige_navegador(self) -> bool:
         """Uma fonte que só abre o navegador do usuário não precisa do nosso."""
+        if self.tipo == "api":
+            return False
         return any(passo.acao in self.ACOES_COM_NAVEGADOR for passo in self.passos)
 
     @property
@@ -105,6 +111,8 @@ class Contexto:
     registrar: Callable[[str, str], None]
     pasta_sessao: str | None = None
     visivel: bool = True
+    #: credenciais já decifradas, por rótulo (usadas pelas fontes de API)
+    segredos: dict[str, str] = field(default_factory=dict)
 
     def aplicar(self, texto: str | None) -> str:
         """Substitui {variaveis} de um valor da fonte."""
@@ -137,3 +145,5 @@ class Resultado:
     situacao: SituacaoCertidao = SituacaoCertidao.NAO_IDENTIFICADA
     aguarda_anexo: bool = False
     texto_extraido: str = ""
+    #: custo cobrado pela emissão, quando a fonte é uma API paga
+    custo: float = 0.0

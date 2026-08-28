@@ -532,6 +532,71 @@ def abrir_pasta_de_documentos():
     return {"pasta": caminho}
 
 
+class CredencialDeApi(BaseModel):
+    rotulo: str
+    segredo: str
+
+
+@app.get("/api/credenciais")
+def listar_credenciais():
+    """Só os rótulos e se estão preenchidos — o segredo nunca sai daqui."""
+    from ..modelos import Credencial
+    from ..seguranca import mascarar
+
+    with sessao() as s:
+        consulta = select(Credencial).where(Credencial.tipo == "api").order_by(Credencial.rotulo)
+        return [
+            {"rotulo": c.rotulo, "segredo": mascarar(c.segredo),
+             "criado_em": c.criado_em.isoformat() if c.criado_em else None}
+            for c in s.scalars(consulta)
+        ]
+
+
+@app.put("/api/credenciais")
+def salvar_credencial(dados: CredencialDeApi):
+    with sessao() as s:
+        servicos.salvar_credencial_de_api(s, dados.rotulo, dados.segredo)
+    return {"ok": True, "rotulo": dados.rotulo.strip()}
+
+
+@app.delete("/api/credenciais/{rotulo}")
+def excluir_credencial(rotulo: str):
+    from ..modelos import Credencial
+
+    with sessao() as s:
+        credencial = s.scalar(
+            select(Credencial).where(Credencial.tipo == "api", Credencial.rotulo == rotulo)
+        )
+        if credencial is None:
+            raise HTTPException(404, "Credencial não encontrada.")
+        s.delete(credencial)
+    return {"ok": True}
+
+
+@app.get("/api/relatorios/custos")
+def relatorio_de_custos(de: str | None = None, ate: str | None = None, formato: str = "json"):
+    """Custo das emissões pagas por titular — a base do repasse ao cliente."""
+    with sessao() as s:
+        linhas = servicos.custos_por_titular(s, _data(de), _data(ate))
+    total = round(sum(linha["total"] for linha in linhas), 2)
+    if formato != "csv":
+        return {"periodo": {"de": de, "ate": ate}, "total": total, "titulares": linhas}
+
+    saida = ["titular;documento;data;certidao;custo"]
+    for linha in linhas:
+        for item in linha["itens"]:
+            saida.append(
+                f"{linha['titular']};{linha['documento']};{item['data']};"
+                f"{item['certidao']};{item['custo']:.2f}".replace(".", ",")
+            )
+    saida.append(f"TOTAL;;;;{total:.2f}".replace(".", ","))
+    return Response(
+        content="\n".join(saida).encode("utf-8-sig"),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="custos-de-emissao.csv"'},
+    )
+
+
 class PedidoConferencia(BaseModel):
     codigos: list[str] = Field(default_factory=list)
     #: mostrar a janela do navegador; sem valor, segue a configuração do sistema

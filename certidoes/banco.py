@@ -49,6 +49,11 @@ RENOMEACOES = [
     ("tipo_certidao", "receita", "fonte"),
 ]
 
+#: (tabela, coluna, definição) — colunas acrescentadas depois da primeira versão
+COLUNAS_NOVAS = [
+    ("certidao", "custo", "FLOAT DEFAULT 0"),
+]
+
 
 def _colunas(conexao, tabela: str) -> set[str]:
     try:
@@ -68,6 +73,12 @@ def migrar() -> None:
             if antiga in colunas and nova not in colunas:
                 conexao.exec_driver_sql(
                     f'ALTER TABLE {tabela} RENAME COLUMN "{antiga}" TO "{nova}"'
+                )
+        for tabela, coluna, definicao in COLUNAS_NOVAS:
+            colunas = _colunas(conexao, tabela)
+            if colunas and coluna not in colunas:
+                conexao.exec_driver_sql(
+                    f'ALTER TABLE {tabela} ADD COLUMN "{coluna}" {definicao}'
                 )
 
 

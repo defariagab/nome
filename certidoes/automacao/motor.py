@@ -14,6 +14,11 @@ TENTATIVAS_COM_REPETICAO = 3
 
 
 async def _uma_tentativa(fonte: Fonte, ctx: Contexto, escolhido: str) -> Resultado:
+    if fonte.tipo == "api" and escolhido != "simulador":
+        from . import motor_api
+
+        rotulo = (fonte.api or {}).get("credencial", fonte.codigo)
+        return await motor_api.executar(fonte, ctx, token=ctx.segredos.get(rotulo))
     if escolhido == "simulador":
         from . import motor_simulador
 

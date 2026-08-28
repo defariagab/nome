@@ -6,7 +6,7 @@ import enum
 from datetime import date, datetime, timezone
 
 from sqlalchemy import (
-    Boolean, Date, DateTime, Enum, ForeignKey, Integer, JSON, String, Text, UniqueConstraint,
+    Boolean, Date, DateTime, Enum, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -192,7 +192,9 @@ class Certidao(Base):
     )
     arquivo: Mapped[str | None] = mapped_column(String(400))
     arquivo_hash: Mapped[str | None] = mapped_column(String(64))
-    origem: Mapped[str] = mapped_column(String(20), default="automacao")  # automacao | upload
+    origem: Mapped[str] = mapped_column(String(20), default="automacao")  # automacao | upload | api
+    #: quanto a emissão custou, quando veio de uma API paga (em reais)
+    custo: Mapped[float] = mapped_column(Float, default=0.0)
     solicitacao_id: Mapped[int | None] = mapped_column(ForeignKey("solicitacao.id"))
     substituida: Mapped[bool] = mapped_column(Boolean, default=False)
     observacoes: Mapped[str | None] = mapped_column(Text)

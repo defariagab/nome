@@ -66,6 +66,13 @@ Ele confere cada documento antes de arquivar e recusa páginas de erro e avisos 
 instabilidade, dizendo o motivo. Uma emissão que falha assim é tentada de novo
 mais tarde, sozinha.
 
+**Dá para emitir sem captcha nenhum?**
+Sim, onde existe API oficial contratada. A CND Federal, por exemplo, pode vir
+pela API do Serpro: você contrata, cadastra o token em Configurações ›
+Credenciais de API e a emissão passa a ser automática de ponta a ponta. As
+chamadas são cobradas por consulta, e o sistema registra quanto cada cliente
+custou, com planilha para repasse.
+
 **Como apago o que entrou errado?**
 Em Solicitações, *Limpar encerradas* tira da lista o que falhou. No Acervo há
 *Excluir* em cada certidão (apaga o PDF junto). No cadastro do titular há

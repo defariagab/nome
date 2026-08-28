@@ -122,6 +122,45 @@ Dois modificadores servem para os sites do mundo real:
 - **`opcional: true`** deixa o passo passar quando o elemento não está lá.
   Banner de cookies, aviso de manutenção, campo que só aparece às vezes.
 
+### Fontes por API contratada
+
+Onde existe um serviço oficial, chamar a API é melhor do que operar o site: não
+há captcha, não há bloqueio a automação, o contrato dá suporte e a resposta não
+quebra quando o órgão muda o layout.
+
+O caso confirmado é a **API Consulta CND do Serpro** — a estatal de TI do
+governo —, que consulta as certidões federais de RFB e PGFN para pessoa
+jurídica, física e imóvel rural, com autenticação por bearer token, chamadas
+cobradas por consulta e um ambiente de demonstração gratuito para testar antes
+de contratar ([documentação](https://apicenter.estaleiro.serpro.gov.br/documentacao/consulta-cnd/),
+[contratação](https://www.loja.serpro.gov.br/consultacnd)).
+
+Uma fonte de API é declarada como qualquer outra, sem código novo:
+
+```yaml
+tipo: api
+api:
+  endereco: https://gateway.apiserpro.serpro.gov.br/consulta-cnd/api/v1/certidao
+  credencial: serpro_cnd          # rótulo do token guardado no cofre
+  parametros: { ni: "{documento}" }
+  custo_por_emissao: 0.00         # alimenta o relatório de custos
+  resposta:                       # onde estão os campos no JSON de retorno
+    documento: dados.certidao     # o PDF, em base64
+    validade: dados.dataValidade
+    erro: mensagem
+```
+
+O token fica **cifrado no cofre** e nunca volta pela API do sistema. A fonte
+`rfb_pgfn_api_serpro` já vem pronta, desativada, com o passo a passo de
+ativação no próprio arquivo — os nomes exatos dos campos devem ser conferidos
+na referência que acompanha o contrato.
+
+### Custo por emissão e repasse ao cliente
+
+Cada certidão emitida por API guarda quanto custou. Em **Configurações › Custo
+das emissões** há o total por titular no período, com exportação em CSV — é a
+base para repassar o custo a quem contratou o serviço.
+
 ### Captcha em escala: o problema dos 40 captchas
 
 Emitir 40 certidões não pode custar 40 interrupções. Três mecanismos atacam isso:

@@ -23,6 +23,24 @@
     endereço no SEU navegador, onde o gov.br já está logado, e cuida do
     arquivamento e do controle de validade do PDF que você anexar.
 
+- codigo: rfb_pgfn_api_serpro
+  nome: Certidão Negativa de Débitos Federais (via API Consulta CND)
+  sigla: CND Federal (API)
+  orgao: Receita Federal do Brasil / Procuradoria-Geral da Fazenda Nacional
+  esfera: federal
+  validade_dias: 180
+  captcha: nenhum
+  modo: automatico
+  fonte: rfb_pgfn_api_serpro
+  ativo: false
+  url: https://www.loja.serpro.gov.br/consultacnd
+  observacoes: >-
+    Mesma certidão da CND Federal, emitida pela API oficial do Serpro em vez do
+    portal: sem captcha, sem bloqueio a automação e com contrato de suporte. As
+    chamadas são cobradas por consulta, e o custo de cada emissão fica
+    registrado para repasse ao cliente. Desativada até que o token seja
+    cadastrado em Configurações › Credenciais de API.
+
 - codigo: cndt
   nome: Certidão Negativa de Débitos Trabalhistas
   sigla: CNDT
