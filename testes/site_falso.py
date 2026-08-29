@@ -22,10 +22,20 @@ RESPOSTA_CAPTCHA = {"valor": ""}
 def _svg(texto: str) -> str:
     letras = "".join(
         f'<text x="{12 + i * 26}" y="40" font-size="30" font-family="monospace" '
-        f'fill="#123">{c}</text>'
+        f'fill="#123" transform="rotate({-8 + i * 4} {20 + i * 26} 40)">{c}</text>'
         for i, c in enumerate(texto)
     )
-    svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="180" height="60">{letras}</svg>'
+    # riscos por cima, como nos captchas de verdade: sem eles a imagem de
+    # teste seria limpa demais para valer como réplica
+    ruido = "".join(
+        f'<line x1="{i * 7}" y1="{(i * 13) % 60}" x2="{180 - i * 5}" y2="{(i * 29) % 60}" '
+        f'stroke="#9ab" stroke-width="1"/>'
+        for i in range(24)
+    )
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="60">'
+        f'<rect width="180" height="60" fill="#eef"/>{ruido}{letras}</svg>'
+    )
     return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
 
 
@@ -73,8 +83,23 @@ class Manipulador(BaseHTTPRequestHandler):
         self.wfile.write(corpo)
 
     def do_GET(self):
+        if self.path.startswith("/crf-certificado"):
+            corpo = (
+                "<html><body><h1>Certificado de Regularidade do FGTS - CRF</h1>"
+                "<p>Numero do CRF: 2026082900001</p>"
+                "<p>Validade: 26/09/2026</p></body></html>"
+            )
+            self._responder(corpo.encode(), "text/html; charset=utf-8")
+            return
         if self.path.startswith("/crf"):
             self._responder(PAGINA_CRF.encode(), "text/html; charset=utf-8")
+            return
+        if self.path.startswith("/favicon"):
+            # o navegador pede o ícone sozinho: se isso sorteasse um captcha
+            # novo, a réplica deixaria de reproduzir o site
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
             return
         RESPOSTA_CAPTCHA["valor"] = "".join(random.choices(string.ascii_lowercase, k=5))
         pagina = PAGINA.format(captcha=_svg(RESPOSTA_CAPTCHA["valor"]))
@@ -97,10 +122,14 @@ class Manipulador(BaseHTTPRequestHandler):
             if not campos.get("uf", [""])[0]:
                 self._responder(b"<html><body>Informe a UF</body></html>", "text/html; charset=utf-8")
                 return
+            # Como na Caixa: a consulta responde uma pagina de resultado, e o
+            # certificado em si so aparece depois de clicar no link.
             corpo = (
-                "<html><body><h1>Certificado de Regularidade do FGTS - CRF</h1>"
+                "<html><body><h1>Situacao de Regularidade do Empregador</h1>"
                 f"<p>Inscricao: {campos.get('ins', [''])[0]}</p>"
-                "<p>Validade: 26/09/2026</p></body></html>"
+                "<p>A empresa abaixo identificada esta REGULAR no FGTS.</p>"
+                "<a href=\'/crf-certificado\'>Obtenha o Certificado de "
+                "Regularidade do FGTS - CRF</a></body></html>"
             )
             self._responder(corpo.encode(), "text/html; charset=utf-8")
             return

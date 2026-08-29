@@ -16,6 +16,10 @@ bibliotecas **e o navegador do Playwright** sozinho, e depois abre o painel. Se 
 navegador não puder ser instalado, o sistema abre assim mesmo: o controle de
 validade e o arquivo de PDFs não dependem dele.
 
+Clicar duas vezes no atalho não abre um segundo painel: o programa percebe que já
+existe um em funcionamento e apenas traz para a frente a janela que existe. Um
+painel por vez — dois abririam duas abas iguais sobre um servidor só.
+
 Quer conhecer o sistema antes de cadastrar clientes de verdade?
 
 ```
@@ -201,7 +205,10 @@ Emitir 40 certidões não pode custar 40 interrupções. Três mecanismos atacam
 **1. Sala de captchas.** As emissões com captcha de letras rodam **em paralelo**
 (quatro por vez, ajustável). As imagens chegam a uma única tela, uma atrás da
 outra: você digita, tecla Enter e a próxima já está lá — sem esperar cada site
-carregar, sem trocar de janela. Quarenta captchas viram alguns minutos de
+carregar, sem trocar de janela. A imagem mostrada é a que o órgão gerou, lida do
+próprio endereço que o site usa (`data:` na maioria deles), não uma fotografia da
+tela — fotografia sai borrada, e captcha borrado ninguém lê. Um clique na imagem
+amplia ao dobro, para os casos em que o órgão manda um desenho minúsculo. Quarenta captchas viram alguns minutos de
 digitação em vez de quarenta esperas. Quem responde continua sendo uma pessoa: o
 sistema não quebra, não contorna e não terceiriza captcha, porque esse controle
 existe justamente para exigir presença humana, e burlá-lo em sistema público não

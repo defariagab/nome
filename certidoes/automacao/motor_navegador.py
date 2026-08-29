@@ -137,6 +137,50 @@ class Navegador:
         return await asyncio.wait_for(self._downloads.get(), timeout=timeout)
 
 
+async def _imagem_do_captcha(pagina, seletor: str, ctx: Contexto) -> str:
+    """A imagem do captcha, do jeito mais fiel possível.
+
+    Muitos sites entregam o captcha como data URI dentro do próprio `src` — o
+    do TST chama o elemento de `idImgBase64`, sem disfarce. Pegar o `src` dá a
+    imagem exata que o órgão gerou, sem depender de quando a página terminou de
+    pintar: uma foto tirada cedo demais entrega um retângulo quase em branco, e
+    ninguém acerta um captcha que não consegue ler.
+    """
+    try:
+        # `i.width` não serve de sinal: enquanto não há imagem, o navegador
+        # desenha o texto alternativo e devolve a largura dele. Esperamos por
+        # um endereço de verdade — data URI ou imagem já carregada.
+        await pagina.wait_for_function(
+            "seletor => { const i = document.querySelector(seletor);"
+            " if (!i) return false;"
+            " const s = i.currentSrc || i.src || '';"
+            " if (!s) return false;"
+            " if (s.startsWith('data:image')) return true;"
+            " return i.complete && i.naturalWidth > 10; }",
+            arg=seletor,
+            timeout=20_000,
+        )
+    except Exception as erro:
+        raise ErroAutomacao(
+            "A imagem do captcha não carregou na página do órgão. "
+            "Vale tentar de novo em instantes."
+        ) from erro
+
+    origem = await pagina.get_attribute(seletor, "src") or ""
+    if origem.startswith("data:image") and len(origem) > 500:
+        ctx.registrar("captcha", "imagem lida do próprio site")
+        return origem
+
+    ctx.registrar("captcha", "imagem capturada da tela")
+    foto = await pagina.locator(seletor).screenshot()
+    if len(foto) < 400:
+        raise ErroAutomacao(
+            "A imagem do captcha veio em branco. Sem ela não há como responder — "
+            "vale tentar de novo."
+        )
+    return "data:image/png;base64," + base64.b64encode(foto).decode()
+
+
 async def _presente(pagina, seletor: str, ms: int = 3000) -> bool:
     """O elemento está na página agora? Usado pelos passos marcados `opcional`."""
     try:
@@ -212,31 +256,11 @@ async def _executar_passos(fonte: Fonte, ctx: Contexto, navegador: Navegador,
         elif acao == "captcha_imagem":
             seletor = ctx.aplicar(passo.get("seletor"))
             await pagina.wait_for_selector(seletor)
-            # A imagem do captcha costuma ser preenchida por JavaScript depois
-            # que o elemento já existe. Fotografar antes disso entrega uma
-            # figura em branco — e ninguém acerta um captcha que não vê.
-            try:
-                await pagina.wait_for_function(
-                    "seletor => { const i = document.querySelector(seletor);"
-                    " return i && (i.complete !== false) && (i.naturalWidth || i.width) > 10; }",
-                    arg=seletor,
-                    timeout=20_000,
-                )
-            except Exception as erro:
-                raise ErroAutomacao(
-                    "A imagem do captcha não carregou na página do órgão. "
-                    "Vale tentar de novo em instantes."
-                ) from erro
-            imagem = await pagina.locator(seletor).screenshot()
-            if len(imagem) < 400:
-                raise ErroAutomacao(
-                    "A imagem do captcha veio em branco. Sem ela não há como responder — "
-                    "vale tentar de novo."
-                )
+            imagem = await _imagem_do_captcha(pagina, seletor, ctx)
             resposta = await ctx.perguntar(
                 tipo=TipoDesafio.CAPTCHA_IMAGEM,
                 instrucao=passo.get("instrucao") or "Digite os caracteres da imagem.",
-                imagem="data:image/png;base64," + base64.b64encode(imagem).decode(),
+                imagem=imagem,
                 timeout=int(passo.get("timeout", 300)),
             )
             await pagina.fill(ctx.aplicar(passo.get("campo")), resposta.strip())

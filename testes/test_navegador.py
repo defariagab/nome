@@ -117,6 +117,11 @@ def test_captcha_errado_e_repetido_ate_acertar():
 
 @pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
 def test_pagina_de_resultado_vira_pdf():
+    """A consulta é só o meio do caminho: o certificado está um clique adiante.
+
+    Foi exatamente aqui que o FGTS falhou de verdade — o sistema arquivava a
+    tela de consulta ("está REGULAR no FGTS") achando que era o certificado.
+    """
     fonte = Fonte(
         codigo="crf", nome="Certificado de teste", url="{url}/crf", resultado="pagina_pdf",
         passos=[
@@ -125,7 +130,11 @@ def test_pagina_de_resultado_vira_pdf():
             Passo("selecionar", {"seletor": "#uf", "valor": "{uf}"}),
             Passo("clicar", {"seletor": "#consultar"}),
             Passo("esperar", {"ms": 500}),
-            Passo("exigir_texto", {"alternativas": ["Regularidade"],
+            Passo("exigir_texto", {"alternativas": ["REGULAR no FGTS", "Obtenha o Certificado"],
+                                   "mensagem": "O site não apresentou o resultado da consulta."}),
+            Passo("clicar", {"seletor": "a:has-text('Certificado de Regularidade do FGTS')"}),
+            Passo("esperar", {"ms": 500}),
+            Passo("exigir_texto", {"alternativas": ["Validade:", "Numero do CRF"],
                                    "mensagem": "O site não apresentou o certificado."}),
             Passo("salvar_pagina_pdf", {}),
         ],
@@ -135,6 +144,9 @@ def test_pagina_de_resultado_vira_pdf():
 
     assert resultado.documento.startswith(b"%PDF")
     assert resultado.valida_ate.isoformat() == "2026-09-26"
+    # o que foi arquivado é o certificado, não a tela de consulta
+    assert "Numero do CRF" in resultado.texto_extraido
+    assert "REGULAR no FGTS" not in resultado.texto_extraido
 
 
 @pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
@@ -244,3 +256,51 @@ def test_emissoes_simultaneas_dividem_o_mesmo_navegador():
     resultados, abas = asyncio.run(cenario())
     assert all(r.sucesso for r in resultados)
     assert abas >= 2, "cada emissão deve ter a própria aba dentro do mesmo navegador"
+
+
+@pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
+def test_captcha_chega_a_sala_como_a_imagem_do_proprio_site():
+    """A sala mostra a imagem que o órgão gerou, não uma foto dela.
+
+    Fotografar o elemento na tela devolvia um recorte borrado — foi por isso
+    que o captcha do TST ficou ilegível para o usuário. Quando o site entrega
+    o captcha como data URI (e a maioria entrega), é essa imagem que vale.
+    """
+    from testes import site_falso
+
+    fonte = Fonte(
+        codigo="teste", nome="Certidão de teste", url="{url}", resultado="download",
+        passos=[
+            Passo("abrir", {"url": "{url}"}),
+            Passo("preencher", {"seletor": "#doc", "valor": "{documento}"}),
+            Passo("captcha_imagem", {"seletor": "#cap", "campo": "#resp"}),
+            Passo("clicar", {"seletor": "#ok"}),
+            Passo("aguardar_download", {"timeout": 30}),
+        ],
+    )
+    mostradas: list[str] = []
+    respondidas: list[str] = []
+
+    async def perguntar(*, tipo, instrucao, imagem=None, timeout=300):
+        mostradas.append(imagem)
+        # o valor vale no instante da pergunta: o site sorteia outro a cada visita
+        respondidas.append(site_falso.RESPOSTA_CAPTCHA["valor"])
+        return respondidas[-1]
+
+    with SiteFalso() as site:
+        contexto = Contexto(
+            solicitacao_id=0,
+            variaveis={"url": site.url, "documento": "11222333000181"},
+            perguntar=perguntar, registrar=lambda t, m: None, visivel=False,
+        )
+        resultado = asyncio.run(executar(fonte, contexto, motor="navegador"))
+
+    assert resultado.sucesso
+    assert mostradas, "nenhuma imagem de captcha foi apresentada"
+    mostrada = mostradas[0]
+    assert mostrada.startswith("data:image/svg+xml"), (
+        "a sala recebeu uma foto da tela em vez da imagem original do site"
+    )
+    original = base64.b64decode(mostrada.split(",", 1)[1]).decode()
+    for letra in respondidas[0]:
+        assert f">{letra}<" in original, "a imagem mostrada não é a do captcha respondido"

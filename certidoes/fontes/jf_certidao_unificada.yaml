@@ -1,50 +1,26 @@
 codigo: jf_certidao_unificada
 nome: Certidão Unificada da Justiça Federal — CJF
 url: https://certidao-unificada.cjf.jus.br/#/solicitacao-certidao
-resultado: download
-ao_falhar: pedir_anexo
-# Seletores obtidos da conferência feita na máquina do escritório em 27/08/2026.
-# O site separa CPF e CNPJ em campos distintos, daí os passos com `quando`.
-# A certidão abrange as Regiões da Justiça Federal, EXCETO o TRF6.
-# Confirmado pelo escritório em 27/08/2026: o CJF emite na hora (o arquivo vem
-# pelo navegador) e ainda manda uma cópia por e-mail. Por isso `aguardar_download`
-# — e o e-mail preenchido é o do escritório, não o do cliente, para que a cópia
-# chegue a quem acompanha o vencimento.
+resultado: anexo_manual
+# Conferido no escritório em 28/08/2026: o formulário tem mais etapas do que a
+# automação sabia fazer — tipo de certidão (cível ou criminal), seleção de
+# órgãos, escolha entre CPF e CNPJ por botão de opção, o número, e o e-mail em
+# dois campos. A tentativa anterior ficava parada na tela sem preencher nada,
+# que é pior do que não tentar.
+#
+# Enquanto os campos não forem mapeados um a um, o caminho honesto é abrir no
+# navegador do usuário — onde a emissão leva menos de um minuto — e arquivar o
+# PDF anexado, com controle de validade igual ao das demais.
+#
+# Para completar a automação: Configurações › Mapear um site novo, com este
+# endereço e uns 30 segundos de espera, tendo o formulário à vista. O relatório
+# traz a etiqueta e o tipo de cada campo, que é o que falta.
 passos:
-  - acao: abrir
+  - acao: abrir_no_navegador
     url: "{url}"
-  # O site demora a montar o formulário: em vez de um tempo fixo, espera o
-  # campo aparecer.
-  - acao: esperar
-    seletor: 'input[name="cpfCnpj"], [id="cpf"], [id="cnpj"]'
-  # "CPF" e "CNPJ" parecem ser a escolha do tipo de documento (o clique
-  # seleciona), enquanto o número vai no campo compartilhado. Os cliques são
-  # opcionais: se forem os próprios campos de texto, o clique só dá foco.
-  - acao: clicar
-    seletor: '[id="cnpj"]'
-    quando: cnpj
-    opcional: true
-  - acao: clicar
-    seletor: '[id="cpf"]'
-    quando: "!cnpj"
-    opcional: true
-  - acao: preencher
-    seletor: 'input[name="cpfCnpj"]'
-    valor: "{documento_formatado}"
-  - acao: preencher
-    seletor: '[id="email"]'
-    valor: "{email_notificacao}"
-    opcional: true
-  - acao: preencher
-    seletor: '[id="emailConfirmacao"]'
-    valor: "{email_notificacao}"
-    opcional: true
-  - acao: captcha_interativo
-    seletor: 'iframe[title*="reCAPTCHA"], iframe[name^="a-"]'
+  - acao: acao_manual
     instrucao: >-
-      Confirme o reCAPTCHA na janela do navegador aberta na página do CJF e volte
-      aqui. Lembre-se: a certidão unificada não cobre o TRF6.
-  - acao: clicar
-    seletor: 'button:has-text("Solicitar certidão")'
-  - acao: aguardar_download
-    timeout: 120
+      Abri a Certidão Unificada da Justiça Federal no seu navegador. Escolha o
+      tipo (cível ou criminal), informe CPF ou CNPJ e o e-mail, e solicite. O
+      documento sai na hora e também vai por e-mail. Depois anexe o PDF aqui —
+      lembrando que esta certidão não cobre o TRF6.

@@ -799,6 +799,23 @@ function fecharSala() {
   carregar();
 }
 
+// Captcha de letras costuma vir pequeno demais para ler com conforto. A imagem
+// abre já ampliada e um clique alterna entre o tamanho normal e o dobro — sem
+// suavização, que só borraria os traços que precisamos distinguir.
+function imagemDoCaptcha(origem) {
+  const NORMAL = "width:100%; max-width:420px; image-rendering:crisp-edges; cursor:zoom-in";
+  const AMPLIADA = "width:100%; max-width:840px; image-rendering:pixelated; cursor:zoom-out";
+  const img = el("img", { src: origem, alt: "Imagem do captcha", style: NORMAL });
+  img.addEventListener("click", () => {
+    img.setAttribute("style", img.getAttribute("style") === NORMAL ? AMPLIADA : NORMAL);
+  });
+  return el("div", { class: "captcha-caixa" }, [
+    img,
+    el("p", { class: "apoio", style: "margin:6px 0 0" }, "Clique na imagem para ampliar."),
+  ]);
+}
+
+
 function desenharSala() {
   const desafio = estado.desafios[0];
   if (!desafio) return fecharSala();
@@ -832,13 +849,7 @@ function desenharSala() {
   $("#desafio-corpo").replaceChildren(el("div", {}, [
     el("p", { class: "apoio" }, `${desafio.certidao} — ${desafio.titular}`),
     el("div", { class: "instrucao" }, desafio.instrucao),
-    desafio.imagem
-      ? el("div", { class: "captcha-caixa" },
-          el("img", {
-            src: desafio.imagem, alt: "Imagem do captcha",
-            style: "width:100%; max-width:360px; image-rendering:crisp-edges",
-          }))
-      : null,
+    desafio.imagem ? imagemDoCaptcha(desafio.imagem) : null,
     digitar ? entrada : null,
     restantes > 1
       ? el("p", { class: "apoio", style: "margin-top:10px" },

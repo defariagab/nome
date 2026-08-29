@@ -2,7 +2,11 @@ codigo: fgts_crf
 nome: CRF/FGTS — Caixa Econômica Federal
 url: https://consulta-crf.caixa.gov.br/consultacrf/pages/consultaEmpregador.jsf
 resultado: pagina_pdf
-verificado_em: 2026-08-27
+verificado_em: 2026-08-28
+# A consulta tem DUAS etapas, e parar na primeira era o erro anterior: a página
+# de resultado só diz se a empresa está regular e oferece o link
+# "Obtenha o Certificado de Regularidade do FGTS - CRF". O certificado mesmo
+# está depois desse clique.
 passos:
   - acao: abrir
     url: "{url}"
@@ -19,14 +23,25 @@ passos:
     seletor: "[id='mainForm:btnConsultar']"
   - acao: esperar
     ms: 2500
-  # "Regularidade" sozinha não serve: a página de erro da Caixa se chama
-  # "Situação de Regularidade do Empregador" e diz justamente o contrário.
-  # Exigimos o nome do documento emitido.
+  # A situação do empregador aparece aqui. Se houver irregularidade, a Caixa não
+  # oferece o certificado, e o passo seguinte falha dizendo isso.
   - acao: exigir_texto
     alternativas:
-      - "certificado de regularidade"
-      - "CRF"
+      - "REGULAR no FGTS"
+      - "Obtenha o Certificado"
     mensagem: >-
-      A Caixa não apresentou o certificado. Pode ser pendência de FGTS do
-      empregador ou instabilidade do sistema — confira a tela do navegador.
+      A Caixa não apresentou a situação de regularidade. Pode ser pendência de
+      FGTS do empregador ou instabilidade do sistema — confira a tela do navegador.
+  - acao: clicar
+    seletor: "a:has-text('Certificado de Regularidade do FGTS')"
+  - acao: esperar
+    ms: 3000
+  # Só o certificado de verdade traz validade e número; a página anterior não.
+  - acao: exigir_texto
+    alternativas:
+      - "Validade:"
+      - "Número do CRF"
+    mensagem: >-
+      Cheguei à consulta, mas o certificado em si não abriu. Confira a tela do
+      navegador e, se ele estiver lá, anexe o PDF.
   - acao: salvar_pagina_pdf
