@@ -241,7 +241,8 @@ class Fila:
             # O perfil guarda cookies e login: quem entra no gov.br uma vez
             # segue emitindo sem repetir a autenticação.
             pasta_sessao=str(config.pasta_sessoes / fonte.perfil) if fonte.perfil else None,
-            visivel=config.navegador_visivel,
+            # A janela só aparece quando a fonte precisa da pessoa nela.
+            visivel=config.navegador_visivel or fonte.exige_janela,
             segredos=segredos,
         )
 

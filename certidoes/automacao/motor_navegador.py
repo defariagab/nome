@@ -15,6 +15,7 @@ from datetime import date
 import webbrowser
 
 from .. import validacao
+from ..arquivos import arquivo_de_tela
 from ..config import config
 from ..modelos import SituacaoCertidao, TipoDesafio
 from .extracao import analisar
@@ -51,9 +52,12 @@ def _erro_de_navegador(erro: Exception) -> ErroAutomacao | None:
 class Navegador:
     """Envolve o Playwright e mantém a sessão (cookies, login gov.br)."""
 
-    def __init__(self, *, visivel: bool = True, pasta_sessao: str | None = None):
+    def __init__(self, *, visivel: bool = False, pasta_sessao: str | None = None):
         self.visivel = visivel
         self.pasta_sessao = pasta_sessao
+        #: a aba que a emissão está operando — é dela que sai a foto quando
+        #: algo dá errado, já que não há janela na tela para a pessoa olhar
+        self.pagina_atual = None
         self._pw = None
         self._contexto = None
         self._downloads: asyncio.Queue = asyncio.Queue()
@@ -181,6 +185,26 @@ async def _imagem_do_captcha(pagina, seletor: str, ctx: Contexto) -> str:
     return "data:image/png;base64," + base64.b64encode(foto).decode()
 
 
+async def _guardar_tela(navegador: "Navegador", ctx: Contexto) -> str | None:
+    """Fotografa a página como o órgão a deixou.
+
+    Com a automação rodando sem janela — que é como ela deve rodar —, ninguém
+    vê o que o site respondeu quando algo dá errado. A foto entra no painel, no
+    lugar onde antes se dizia "confira a tela do navegador".
+    """
+    pagina = getattr(navegador, "pagina_atual", None)
+    if pagina is None or not ctx.solicitacao_id:
+        return None
+    destino = arquivo_de_tela(ctx.solicitacao_id)
+    try:
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        await pagina.screenshot(path=str(destino), full_page=True)
+    except Exception:  # a foto é um extra: nunca pode virar a falha principal
+        return None
+    ctx.registrar("tela", "Guardei a tela do órgão; ela aparece em Detalhes.")
+    return f"/api/solicitacoes/{ctx.solicitacao_id}/tela"
+
+
 async def _presente(pagina, seletor: str, ms: int = 3000) -> bool:
     """O elemento está na página agora? Usado pelos passos marcados `opcional`."""
     try:
@@ -213,6 +237,7 @@ async def _conferir_erros(pagina, passo, ctx: Contexto) -> None:
 async def _executar_passos(fonte: Fonte, ctx: Contexto, navegador: Navegador,
                            aba_propria: bool = False) -> Resultado:
     pagina = await navegador.nova_pagina(propria=aba_propria)
+    navegador.pagina_atual = pagina
     documento: bytes | None = None
     texto_pagina = ""
     aguarda_anexo = fonte.resultado == "anexo_manual"
@@ -241,7 +266,32 @@ async def _executar_passos(fonte: Fonte, ctx: Contexto, navegador: Navegador,
                 ctx.registrar("passo", f"{acao} {seletor} (não apareceu; seguindo)")
                 continue
             if acao == "clicar":
-                await pagina.click(seletor)
+                # Alguns órgãos abrem a versão para impressão numa janela nova.
+                # Com `seguir_janela`, a emissão continua nela — sem isso o
+                # sistema seguiria olhando para a página anterior.
+                if passo.get("seguir_janela"):
+                    falha_do_clique: Exception | None = None
+                    try:
+                        async with pagina.context.expect_page(timeout=8_000) as nova:
+                            try:
+                                await pagina.click(seletor)
+                            except Exception as erro:
+                                falha_do_clique = erro
+                                raise
+                    except Exception:
+                        # um clique que não funcionou é falha de verdade; já a
+                        # janela que não abriu só quer dizer que o site
+                        # respondeu ali mesmo
+                        if falha_do_clique is not None:
+                            raise falha_do_clique
+                        ctx.registrar("passo", "o site respondeu na mesma página")
+                    else:
+                        pagina = await nova.value
+                        await pagina.wait_for_load_state("domcontentloaded")
+                        navegador.pagina_atual = pagina
+                        ctx.registrar("passo", "o site abriu uma janela nova; segui nela")
+                else:
+                    await pagina.click(seletor)
             elif acao == "preencher":
                 await pagina.fill(seletor, ctx.aplicar(passo.get("valor")))
             else:
@@ -447,28 +497,29 @@ async def executar(fonte: Fonte, ctx: Contexto, navegador: Navegador | None = No
 
 async def _tentar(fonte: Fonte, ctx: Contexto, navegador: Navegador,
                   aba_propria: bool) -> Resultado:
-    if True:
-        try:
-            return await _executar_passos(fonte, ctx, navegador, aba_propria=aba_propria)
-        except ErroAutomacao:
+    try:
+        return await _executar_passos(fonte, ctx, navegador, aba_propria=aba_propria)
+    except ErroAutomacao:
+        await _guardar_tela(navegador, ctx)
+        raise
+    except Exception as erro:
+        # Site mudou, campo sumiu, página demorou: em vez de falhar seco, a
+        # fonte pode entregar o trabalho já adiantado para a pessoa concluir.
+        tela = await _guardar_tela(navegador, ctx)
+        if fonte.ao_falhar != "pedir_anexo":
             raise
-        except Exception as erro:
-            # Site mudou, campo sumiu, página demorou: em vez de falhar seco, a
-            # fonte pode entregar o trabalho já adiantado para a pessoa
-            # concluir na janela que ficou aberta na página certa.
-            if fonte.ao_falhar != "pedir_anexo":
-                raise
-            ctx.registrar("degradou", f"A automação parou em um passo: {type(erro).__name__}")
-            await ctx.perguntar(
-                tipo=TipoDesafio.ACAO_MANUAL,
-                instrucao=(
-                    "A automação não reconheceu esta página — o site do órgão deve ter mudado. "
-                    "O navegador está aberto no lugar certo: conclua a emissão por lá, salve o "
-                    "PDF e anexe aqui. O controle de validade continua igual."
-                ),
-                timeout=900,
-            )
-            return Resultado(
-                sucesso=True, aguarda_anexo=True,
-                mensagem="A automação parou no meio; anexe o PDF emitido no site.",
-            )
+        ctx.registrar("degradou", f"A automação parou em um passo: {type(erro).__name__}")
+        await ctx.perguntar(
+            tipo=TipoDesafio.ACAO_MANUAL,
+            instrucao=(
+                "A automação não reconheceu esta página — o site do órgão deve ter mudado. "
+                "Abaixo está a tela como o órgão a deixou. Emita a certidão no site do "
+                "órgão, salve o PDF e anexe aqui; o controle de validade continua igual."
+            ),
+            imagem=tela,
+            timeout=900,
+        )
+        return Resultado(
+            sucesso=True, aguarda_anexo=True,
+            mensagem="A automação parou no meio; anexe o PDF emitido no site.",
+        )

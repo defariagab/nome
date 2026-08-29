@@ -14,6 +14,13 @@ from datetime import date, datetime
 from ..modelos import SituacaoCertidao
 
 _DATA = re.compile(r"\b(\d{2})/(\d{2})/(\d{4})\b")
+#: "Validade: 17/08/2026 a 15/09/2026" — o CRF do FGTS declara o período
+#: inteiro, e quem vence é a segunda data. Ler a primeira faz o sistema
+#: arquivar um certificado novo já como vencido.
+_VALIDADE_PERIODO = re.compile(
+    r"validade\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})\s*(?:a|at[eé]|-|–|/)\s*(\d{2}/\d{2}/\d{4})",
+    re.IGNORECASE,
+)
 #: padrões de validade, do mais específico ao mais genérico
 _VALIDADES = [
     re.compile(r"v[aá]lid[ao]\s+at[eé]\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})", re.IGNORECASE),
@@ -58,6 +65,10 @@ def _para_data(texto: str) -> date | None:
 
 
 def data_de_validade(texto: str) -> date | None:
+    if achou := _VALIDADE_PERIODO.search(texto):
+        inicio, fim = _para_data(achou.group(1)), _para_data(achou.group(2))
+        if fim and (inicio is None or fim >= inicio):
+            return fim
     for padrao in _VALIDADES:
         if achou := padrao.search(texto):
             if data := _para_data(achou.group(1)):

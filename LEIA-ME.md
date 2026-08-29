@@ -87,6 +87,11 @@ usa o e-mail do titular. Nas fontes, é a variável `{email_notificacao}`.
 `validade_dias` do catálogo é só o padrão do órgão. Quando o PDF informa a data de
 validade, é a data do PDF que vale — é ela que o fiscal vai olhar.
 
+Alguns documentos declaram o período inteiro em vez da data final: o CRF do FGTS
+escreve *"Validade: 17/08/2026 a 15/09/2026"*. Quem vence é a segunda data. Ler a
+primeira faria o sistema arquivar um certificado recém-emitido já como vencido e
+pedir renovação no mesmo dia.
+
 ## Automação, sem fingimento
 
 Cada órgão vira uma **fonte** declarativa (`certidoes/fontes/*.yaml`), executada
@@ -201,6 +206,15 @@ base para repassar o custo a quem contratou o serviço.
 ### Captcha em escala: o problema dos 40 captchas
 
 Emitir 40 certidões não pode custar 40 interrupções. Três mecanismos atacam isso:
+
+**0. A automação não abre janela.** As emissões rodam com o navegador invisível:
+o site do órgão não pula na frente do que você está fazendo, e todo o trabalho
+acontece dentro do painel. A janela só aparece onde o órgão exige você nele —
+login gov.br e captcha interativo (hCaptcha/reCAPTCHA). Quando algo dá errado,
+em vez de mandar você "conferir a tela do navegador", o sistema guarda uma foto
+da tela do órgão e a mostra em **Detalhes**, na própria solicitação. Para
+investigar um site acompanhando o preenchimento, `CERTIDOES_NAVEGADOR_VISIVEL=1`
+abre a janela em todas as emissões.
 
 **1. Sala de captchas.** As emissões com captcha de letras rodam **em paralelo**
 (quatro por vez, ajustável). As imagens chegam a uma única tela, uma atrás da

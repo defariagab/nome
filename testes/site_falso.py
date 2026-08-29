@@ -83,11 +83,25 @@ class Manipulador(BaseHTTPRequestHandler):
         self.wfile.write(corpo)
 
     def do_GET(self):
-        if self.path.startswith("/crf-certificado"):
+        if self.path.startswith("/crf-impressao"):
+            # a versao para impressao: sem os botoes da tela do sistema
             corpo = (
                 "<html><body><h1>Certificado de Regularidade do FGTS - CRF</h1>"
-                "<p>Numero do CRF: 2026082900001</p>"
-                "<p>Validade: 26/09/2026</p></body></html>"
+                "<p>PANDURATA LOGISTICA LTDA</p>"
+                "<p>Certificado Numero: 2026082900001</p>"
+                "<p>Validade: 17/08/2026 a 26/09/2026</p></body></html>"
+            )
+            self._responder(corpo.encode(), "text/html; charset=utf-8")
+            return
+        if self.path.startswith("/crf-certificado"):
+            # a tela do sistema: o certificado ja aparece, mas com os botoes
+            # "Visualizar" e "Voltar" em volta, como na Caixa
+            corpo = (
+                "<html><body><h1>Certificado de Regularidade do FGTS - CRF</h1>"
+                "<p>Certificado Numero: 2026082900001</p>"
+                "<p>Validade: 17/08/2026 a 26/09/2026</p>"
+                "<a href=\'/crf-impressao\' target=\'_blank\'>Visualizar</a>"
+                "<a href=\'/crf\'>Voltar</a></body></html>"
             )
             self._responder(corpo.encode(), "text/html; charset=utf-8")
             return

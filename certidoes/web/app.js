@@ -552,6 +552,16 @@ function detalhes(item) {
     el("p", { class: "apoio" }, `Estado: ${ROTULO_ESTADO[item.estado] || item.estado} · tentativas: ${item.tentativas}`),
     item.mensagem ? el("p", {}, item.mensagem) : null,
     el("div", { class: "registro" }, registro),
+    // Sem janela do navegador na tela, é aqui que a pessoa vê o que o órgão
+    // respondeu — sem sair do painel para conferir.
+    item.tem_tela ? el("div", { style: "margin-top:12px" }, [
+      el("p", { class: "apoio" }, "A tela do órgão quando a emissão parou:"),
+      el("img", {
+        src: `/api/solicitacoes/${item.id}/tela?t=${Date.now()}`,
+        alt: "Tela do site do órgão",
+        style: "width:100%; border:1px solid var(--borda); border-radius:8px",
+      }),
+    ]) : null,
     item.diagnostico ? el("p", { class: "apoio", style: "margin-top:12px" }, `Detalhe técnico: ${item.diagnostico}`) : null,
   ]), [el("button", { class: "botao secundario", onclick: fecharModal }, "Fechar")]);
 }
@@ -724,8 +734,8 @@ function formularioTipo(tipo) {
 }
 
 /* --------------------------------------------------- chamar a atenção */
-/* A janela do navegador que a automação usa pode estar na frente do painel.
-   Sem um aviso audível e visível, a pessoa não descobre que há um captcha
+/* A emissão roda sem janela e o painel pode estar numa aba de fundo. Sem um
+   aviso audível e visível, a pessoa não descobre que há um pedido de ajuda
    esperando — e a emissão fica parada até expirar. */
 
 function apitar() {
@@ -741,10 +751,20 @@ function apitar() {
   } catch { /* sem áudio disponível: o aviso visual continua */ }
 }
 
+/* Nem todo pedido de ajuda é captcha: uma ação manual não tem imagem nenhuma
+   para digitar, e anunciá-la como captcha manda a pessoa procurar o que não
+   existe. O aviso diz o que de fato está esperando. */
+function assuntoPendente(quantos) {
+  const digitando = estado.desafios.filter((d) => PRECISA_DIGITAR.has(d.tipo)).length;
+  if (digitando === 0) return quantos > 1 ? `${quantos} pedidos aguardando` : "O sistema precisa de você";
+  if (digitando === quantos) return quantos > 1 ? `${quantos} captchas aguardando` : "Captcha aguardando";
+  return `${quantos} pedidos aguardando (${digitando} captcha(s))`;
+}
+
 function notificar(quantos) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   try {
-    new Notification(quantos > 1 ? `${quantos} captchas aguardando` : "Captcha aguardando", {
+    new Notification(assuntoPendente(quantos), {
       body: "Abra o painel de certidões para responder.",
       tag: "certidoes-captcha",
     });
@@ -753,7 +773,9 @@ function notificar(quantos) {
 
 function marcarTitulo(quantos) {
   if (!estado.tituloOriginal) estado.tituloOriginal = document.title;
-  document.title = quantos ? `(${quantos}) Captcha aguardando — Certidões` : estado.tituloOriginal;
+  document.title = quantos
+    ? `(${quantos}) ${assuntoPendente(quantos)} — Certidões`
+    : estado.tituloOriginal;
 }
 
 /* ------------------------------------------------------ sala de captchas */
@@ -819,11 +841,18 @@ function imagemDoCaptcha(origem) {
 function desenharSala() {
   const desafio = estado.desafios[0];
   if (!desafio) return fecharSala();
-  const mesmo = estado.desafioAtual?.id === desafio.id;
+  const restantes = estado.desafios.length;
+
+  // Redesenhar o que já está na tela apagava o que a pessoa acabou de digitar:
+  // a fila é consultada a cada segundo e meio, e cada consulta trocava o campo
+  // por um vazio. Enquanto o pedido do topo for o mesmo, só o contador muda.
+  if (estado.desafioAtual?.id === desafio.id) {
+    atualizarContador(restantes);
+    return;
+  }
   estado.desafioAtual = desafio;
 
   const digitar = PRECISA_DIGITAR.has(desafio.tipo);
-  const restantes = estado.desafios.length;
   const entrada = el("input", {
     type: "text", placeholder: "Digite e tecle Enter", autocomplete: "off",
     spellcheck: "false", autocapitalize: "off",
@@ -842,42 +871,58 @@ function desenharSala() {
     });
   }
 
-  $("#desafio-titulo").textContent = digitar
-    ? (restantes > 1 ? `Captchas — faltam ${restantes}` : "Digite o captcha")
-    : "O sistema precisa de você";
-
   $("#desafio-corpo").replaceChildren(el("div", {}, [
     el("p", { class: "apoio" }, `${desafio.certidao} — ${desafio.titular}`),
     el("div", { class: "instrucao" }, desafio.instrucao),
     desafio.imagem ? imagemDoCaptcha(desafio.imagem) : null,
     digitar ? entrada : null,
-    restantes > 1
-      ? el("p", { class: "apoio", style: "margin-top:10px" },
-          `Responda e o próximo aparece na hora. ${restantes} pedido(s) na fila.`)
-      : null,
+    el("p", { class: "apoio", id: "desafio-fila", style: "margin-top:10px" }, ""),
   ]));
+  atualizarContador(restantes);
 
-  $("#desafio-enviar").textContent = digitar
-    ? (restantes > 1 ? "Enviar e próximo" : "Enviar")
-    : "Já resolvi, pode continuar";
   $("#cortina-desafio").classList.remove("oculto");
   const proximo = estado.desafios[1];
   if (proximo?.imagem) { const p = new Image(); p.src = proximo.imagem; }
-  if (!mesmo || document.activeElement !== entrada) setTimeout(() => entrada.focus(), 30);
+  if (digitar) setTimeout(() => entrada.focus(), 30);
 
   $("#desafio-enviar").onclick = () => enviarResposta(digitar ? entrada.value.trim() : "ok");
   $("#desafio-adiar").onclick = () => {
     estado.desafiosAdiados.add(desafio.id);
-    estado.desafios.shift();
+    trocarDesafio(() => estado.desafios.shift());
     avisar("Pedido adiado. Ele continua aberto na aba Solicitações.");
-    desenharSala();
   };
   $("#desafio-cancelar").onclick = async () => {
-    const alvo = estado.desafios.shift();
-    desenharSala();
+    const alvo = estado.desafios[0];
+    trocarDesafio(() => estado.desafios.shift());
     await api(`/api/solicitacoes/${alvo.solicitacao_id}/cancelar`, { method: "POST" });
     await carregar();
   };
+}
+
+/* Tira o pedido do topo e desenha o seguinte. Trocar de pedido é a única
+   situação em que a tela pode ser refeita — fora dela, o que está digitado
+   fica onde está. */
+function trocarDesafio(mexer) {
+  mexer();
+  estado.desafioAtual = null;
+  desenharSala();
+}
+
+function atualizarContador(restantes) {
+  const desafio = estado.desafios[0];
+  const digitar = PRECISA_DIGITAR.has(desafio.tipo);
+  $("#desafio-titulo").textContent = digitar
+    ? (restantes > 1 ? `Captchas — faltam ${restantes}` : "Digite o captcha")
+    : "O sistema precisa de você";
+  $("#desafio-enviar").textContent = digitar
+    ? (restantes > 1 ? "Enviar e próximo" : "Enviar")
+    : "Já resolvi, pode continuar";
+  const fila = $("#desafio-fila");
+  if (fila) {
+    fila.textContent = restantes > 1
+      ? `Responda e o próximo aparece na hora. ${restantes} pedido(s) na fila.`
+      : "";
+  }
 }
 
 async function enviarResposta(resposta) {
@@ -888,15 +933,13 @@ async function enviarResposta(resposta) {
   }
   // Mostra o próximo imediatamente e envia em segundo plano: é isso que faz
   // 40 captchas virarem alguns minutos de digitação em vez de 40 esperas.
-  estado.desafios.shift();
-  desenharSala();
+  trocarDesafio(() => estado.desafios.shift());
   try {
     await api(`/api/desafios/${desafio.id}/responder`, {
       method: "POST", body: JSON.stringify({ resposta }),
     });
   } catch {
-    estado.desafios.unshift(desafio);
-    desenharSala();
+    trocarDesafio(() => estado.desafios.unshift(desafio));
   }
 }
 
@@ -974,7 +1017,10 @@ async function desenharConfiguracoes() {
   });
 
   /* --- conferência das fontes contra os sites reais --- */
-  const verNavegador = el("input", { type: "checkbox", checked: "checked" });
+  // Desmarcado de propósito: a conferência precisa rodar como a emissão roda,
+  // e a emissão roda sem janela. Um diagnóstico com janela aberta já deu
+  // "quebrada" para uma fonte que funcionava.
+  const verNavegador = el("input", { type: "checkbox" });
   const resultadoConferencia = el("div", {});
   const conferir = el("button", { class: "botao primario" }, "Conferir agora");
   conferir.addEventListener("click", async () => {
@@ -1109,8 +1155,9 @@ async function desenharConfiguracoes() {
           "para antes do botão de emissão e antes de qualquer captcha. Rode depois de instalar e " +
           "sempre que uma emissão começar a falhar."),
         el("label", { class: "alternador", style: "margin:10px 0" },
-          [verNavegador, "mostrar a janela do navegador (recomendado: alguns sites " +
-           "entregam outra página para um navegador escondido)"]),
+          [verNavegador, "abrir a janela do navegador para acompanhar (só para " +
+           "investigar: as emissões rodam sem janela, e a conferência deve " +
+           "rodar do mesmo jeito para valer)"]),
         conferir,
         resultadoConferencia,
       ]),

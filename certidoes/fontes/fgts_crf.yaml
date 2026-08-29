@@ -31,7 +31,8 @@ passos:
       - "Obtenha o Certificado"
     mensagem: >-
       A Caixa não apresentou a situação de regularidade. Pode ser pendência de
-      FGTS do empregador ou instabilidade do sistema — confira a tela do navegador.
+      FGTS do empregador ou instabilidade do sistema — a tela que ela devolveu
+      está em Detalhes, nesta solicitação.
   - acao: clicar
     seletor: "a:has-text('Certificado de Regularidade do FGTS')"
   - acao: esperar
@@ -40,8 +41,25 @@ passos:
   - acao: exigir_texto
     alternativas:
       - "Validade:"
+      - "Certificado Número"
+    mensagem: >-
+      Cheguei à consulta, mas o certificado em si não abriu. A tela que a Caixa
+      devolveu está em Detalhes, nesta solicitação.
+  # O certificado aberto ainda é a tela do sistema, com os botões "Visualizar" e
+  # "Voltar". O documento que se apresenta a terceiros é o que vem depois do
+  # "Visualizar" — é ele que vai para o arquivo.
+  - acao: clicar
+    seletor: "input[value='Visualizar'], a:has-text('Visualizar'), button:has-text('Visualizar')"
+    seguir_janela: true
+    opcional: true
+  - acao: esperar
+    ms: 2500
+  - acao: exigir_texto
+    alternativas:
+      - "Validade:"
+      - "Certificado Número"
       - "Número do CRF"
     mensagem: >-
-      Cheguei à consulta, mas o certificado em si não abriu. Confira a tela do
-      navegador e, se ele estiver lá, anexe o PDF.
+      Abri o certificado, mas a versão para impressão não carregou. A tela da
+      Caixa está em Detalhes, nesta solicitação.
   - acao: salvar_pagina_pdf

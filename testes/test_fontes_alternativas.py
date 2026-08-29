@@ -60,3 +60,36 @@ def test_certidoes_novas_do_catalogo(s):
     assert [f["codigo"] for f in servicos.fontes_do_tipo(ccir)] == [
         "incra_ccir_site", "incra_ccir_api_serpro"
     ]
+
+
+def test_a_janela_do_navegador_so_aparece_quando_a_pessoa_precisa_dela():
+    """Ver o site sendo preenchido não ajuda: atrapalha.
+
+    A janela pulando na frente do painel foi reclamação do usuário — e é o
+    oposto do que o sistema promete. Ela só se justifica onde o órgão exige a
+    pessoa nele.
+    """
+    from certidoes.automacao.tipos import Fonte, Passo
+
+    def fonte(*acoes, perfil=None, tipo="navegador"):
+        return Fonte(codigo="x", nome="x", url="", perfil=perfil, tipo=tipo,
+                     passos=[Passo(a, {}) for a in acoes])
+
+    assert not fonte("abrir", "preencher", "captcha_imagem", "aguardar_download").exige_janela
+    assert not fonte("abrir", "salvar_pagina_pdf").exige_janela
+    assert fonte("abrir", "captcha_interativo").exige_janela
+    assert fonte("abrir", "login_gov_br").exige_janela
+    assert fonte("abrir", perfil="govbr").exige_janela
+    assert not fonte(tipo="api").exige_janela
+
+
+def test_fila_abre_janela_apenas_para_a_fonte_que_precisa(monkeypatch):
+    from certidoes.automacao.tipos import Fonte, Passo
+    from certidoes.config import config
+
+    monkeypatch.setattr(config, "navegador_visivel", False)
+    com_captcha_de_letras = Fonte(codigo="x", nome="x", url="",
+                                  passos=[Passo("captcha_imagem", {})])
+    com_login = Fonte(codigo="y", nome="y", url="", passos=[Passo("login_gov_br", {})])
+    assert not (config.navegador_visivel or com_captcha_de_letras.exige_janela)
+    assert config.navegador_visivel or com_login.exige_janela

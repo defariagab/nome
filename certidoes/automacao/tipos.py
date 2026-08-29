@@ -78,6 +78,25 @@ class Fonte:
             return False
         return any(passo.acao in self.ACOES_COM_NAVEGADOR for passo in self.passos)
 
+    #: passos em que a pessoa precisa ver e operar o site em pessoa
+    ACOES_NA_JANELA = frozenset({"captcha_interativo", "login_gov_br"})
+
+    @property
+    def exige_janela(self) -> bool:
+        """A janela do navegador precisa aparecer para o usuário?
+
+        Quase nunca. Captcha de letras é respondido dentro do painel, e ver o
+        site sendo preenchido não ajuda ninguém — atrapalha, porque a janela
+        pula na frente do que a pessoa está fazendo. A janela só se justifica
+        onde o site exige a pessoa nele: widget interativo, login gov.br, e o
+        perfil guardado que existe justamente para esse login.
+        """
+        if self.tipo == "api":
+            return False
+        if self.perfil:
+            return True
+        return any(passo.acao in self.ACOES_NA_JANELA for passo in self.passos)
+
     @property
     def paralelizavel(self) -> bool:
         if self.perfil:
@@ -110,7 +129,8 @@ class Contexto:
     perguntar: PerguntarHumano
     registrar: Callable[[str, str], None]
     pasta_sessao: str | None = None
-    visivel: bool = True
+    #: a janela do navegador só aparece quando a fonte precisa da pessoa nela
+    visivel: bool = False
     #: credenciais já decifradas, por rótulo (usadas pelas fontes de API)
     segredos: dict[str, str] = field(default_factory=dict)
 

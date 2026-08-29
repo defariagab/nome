@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..arquivos import arquivo_de_tela
 from ..documento import formatar
 from ..modelos import Certidao, Desafio, Evento, Solicitacao, TipoCertidao, Titular
 
@@ -68,6 +69,8 @@ def solicitacao(s: Solicitacao, nome_titular: str = "", nome_tipo: str = "") -> 
         "mensagem": s.mensagem,
         "diagnostico": s.diagnostico,
         "registro": s.registro or [],
+        # a foto da última tela do órgão, quando houve uma falha para mostrar
+        "tem_tela": arquivo_de_tela(s.id).exists(),
         "certidao_id": s.certidao_id,
         "criado_em": s.criado_em.isoformat() if s.criado_em else None,
         "concluida_em": s.concluida_em.isoformat() if s.concluida_em else None,

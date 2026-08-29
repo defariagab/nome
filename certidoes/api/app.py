@@ -289,6 +289,19 @@ def ler_solicitacao(solicitacao_id: int):
         )
 
 
+@app.get("/api/solicitacoes/{solicitacao_id}/tela")
+def tela_da_solicitacao(solicitacao_id: int):
+    """A foto da tela do órgão na última falha desta solicitação.
+
+    A automação roda sem janela; esta imagem é o que o usuário olha em vez de
+    ter o site pulando na frente do painel.
+    """
+    caminho = arquivos.arquivo_de_tela(solicitacao_id)
+    if not caminho.exists():
+        raise HTTPException(404, "Não há foto de tela para esta solicitação.")
+    return FileResponse(caminho, media_type="image/png")
+
+
 @app.post("/api/solicitacoes/{solicitacao_id}/cancelar")
 def cancelar_solicitacao(solicitacao_id: int):
     desafios.cancelar_abertos(solicitacao_id)

@@ -44,3 +44,26 @@ def test_documento_sem_datas_nao_inventa():
     dados = analisar(None, "documento sem qualquer data")
     assert dados["valida_ate"] is None
     assert dados["emitida_em"] is None
+
+
+def test_validade_declarada_como_periodo_usa_a_data_final():
+    """O CRF do FGTS diz "Validade: 17/08/2026 a 15/09/2026".
+
+    Ler a primeira data fazia o sistema arquivar um certificado recém-emitido
+    já como vencido — e cobrar renovação no mesmo dia.
+    """
+    from certidoes.automacao.extracao import data_de_validade
+
+    texto = (
+        "Certificado de Regularidade do FGTS - CRF\n"
+        "Validade: \n 17/08/2026 a 15/09/2026\n"
+        "Certificado Número: \n2026081704151857022076"
+    )
+    assert data_de_validade(texto).isoformat() == "2026-09-15"
+
+
+def test_validade_simples_continua_valendo():
+    from certidoes.automacao.extracao import data_de_validade
+
+    assert data_de_validade("Validade: 26/09/2026").isoformat() == "2026-09-26"
+    assert data_de_validade("válida até 01/01/2027").isoformat() == "2027-01-01"

@@ -27,8 +27,11 @@ class Config:
     # "simulador" não acessa a internet: usado em testes e na demonstração.
     # "navegador" usa o Playwright para operar os sites reais.
     motor: str = os.environ.get("CERTIDOES_MOTOR", "navegador")
-    # Com o navegador visível o usuário acompanha (e socorre) a automação.
-    navegador_visivel: bool = os.environ.get("CERTIDOES_NAVEGADOR_VISIVEL", "1") != "0"
+    #: força a janela do navegador aberta em TODAS as emissões (diagnóstico).
+    #: Por padrão a automação roda sem janela: o trabalho acontece dentro do
+    #: painel, e o navegador só aparece quando a fonte precisa da pessoa nele
+    #: (login gov.br, captcha interativo). Ver `Fonte.exige_janela`.
+    navegador_visivel: bool = os.environ.get("CERTIDOES_NAVEGADOR_VISIVEL", "0") == "1"
     abrir_navegador_ao_iniciar: bool = os.environ.get("CERTIDOES_ABRIR", "1") != "0"
     #: quantas emissões de captcha de letras rodam ao mesmo tempo — é o que
     #: permite responder vários captchas em sequência, sem esperar entre eles

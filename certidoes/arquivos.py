@@ -17,6 +17,15 @@ def _fatiar(texto: str, tamanho: int = 60) -> str:
     return limpo[:tamanho] or "arquivo"
 
 
+def arquivo_de_tela(solicitacao_id: int) -> Path:
+    """A foto da última tela do órgão numa solicitação.
+
+    A automação roda sem janela; quando algo dá errado, é esta foto que mostra
+    ao usuário o que o site respondeu, sem tirá-lo do painel.
+    """
+    return config.pasta_dados / "telas" / f"solicitacao-{solicitacao_id}.png"
+
+
 def hash_conteudo(dados: bytes) -> str:
     return hashlib.sha256(dados).hexdigest()
 

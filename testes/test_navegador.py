@@ -134,8 +134,12 @@ def test_pagina_de_resultado_vira_pdf():
                                    "mensagem": "O site não apresentou o resultado da consulta."}),
             Passo("clicar", {"seletor": "a:has-text('Certificado de Regularidade do FGTS')"}),
             Passo("esperar", {"ms": 500}),
-            Passo("exigir_texto", {"alternativas": ["Validade:", "Numero do CRF"],
+            Passo("exigir_texto", {"alternativas": ["Validade:", "Certificado Numero"],
                                    "mensagem": "O site não apresentou o certificado."}),
+            # a versão para impressão abre numa janela nova, como na Caixa
+            Passo("clicar", {"seletor": "a:has-text('Visualizar')",
+                             "seguir_janela": True, "opcional": True}),
+            Passo("esperar", {"ms": 500}),
             Passo("salvar_pagina_pdf", {}),
         ],
     )
@@ -143,10 +147,13 @@ def test_pagina_de_resultado_vira_pdf():
         resultado = asyncio.run(executar(fonte, _contexto(site.url, [], lambda: ""), motor="navegador"))
 
     assert resultado.documento.startswith(b"%PDF")
+    # "Validade: 17/08/2026 a 26/09/2026": vence a segunda data, não a primeira
     assert resultado.valida_ate.isoformat() == "2026-09-26"
-    # o que foi arquivado é o certificado, não a tela de consulta
-    assert "Numero do CRF" in resultado.texto_extraido
+    # o que foi arquivado é a via para impressão, não a tela de consulta nem a
+    # tela do sistema com os botões em volta
+    assert "Certificado Numero" in resultado.texto_extraido
     assert "REGULAR no FGTS" not in resultado.texto_extraido
+    assert "Visualizar" not in resultado.texto_extraido
 
 
 @pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
@@ -304,3 +311,33 @@ def test_captcha_chega_a_sala_como_a_imagem_do_proprio_site():
     original = base64.b64decode(mostrada.split(",", 1)[1]).decode()
     for letra in respondidas[0]:
         assert f">{letra}<" in original, "a imagem mostrada não é a do captcha respondido"
+
+
+@pytest.mark.skipif(not _navegador_disponivel(), reason="navegador do Playwright indisponível")
+def test_falha_guarda_a_tela_do_orgao():
+    """Sem janela na tela, a foto é a única forma de ver o que o site respondeu.
+
+    É o que substitui o "confira a tela do navegador" — que deixou de fazer
+    sentido quando a automação passou a rodar sem janela nenhuma.
+    """
+    from certidoes.arquivos import arquivo_de_tela
+
+    fonte = Fonte(
+        codigo="teste", nome="Certidão de teste", url="{url}", resultado="pagina_pdf",
+        passos=[
+            Passo("abrir", {"url": "{url}"}),
+            Passo("exigir_texto", {"alternativas": ["texto que esta pagina nao tem"],
+                                   "mensagem": "O site não apresentou a certidão."}),
+            Passo("salvar_pagina_pdf", {}),
+        ],
+    )
+    foto = arquivo_de_tela(4242)
+    foto.unlink(missing_ok=True)
+
+    with SiteFalso() as site:
+        contexto = _contexto(site.url, [], lambda: "")
+        contexto.solicitacao_id = 4242
+        with pytest.raises(ErroAutomacao):
+            asyncio.run(executar(fonte, contexto, motor="navegador"))
+
+    assert foto.exists() and foto.stat().st_size > 1000
